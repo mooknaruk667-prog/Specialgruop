@@ -44,7 +44,7 @@ pie_gender_color = {'ชาย': '#3498db', 'หญิง': '#ff66b3'}
 bar_gender_color = {'ชาย': '#2A9D8F', 'หญิง': '#E76F51'} 
 
 # ------------------------------------------------
-# 2. ระบบสร้าง PDF (ปรับขนาดฟอนต์และแก้ตารางล้น)
+# 2. ระบบสร้าง PDF (แบบหน้าเดียว 2 คอลัมน์)
 # ------------------------------------------------
 def generate_pdf(df):
     load_fonts()
@@ -72,21 +72,21 @@ def generate_pdf(df):
         
     def draw_table(x, y, headers, data, widths):
         pdf.set_xy(x, y)
-        pdf.set_font("Sarabun", "B", 10) # ลดฟอนต์หัวตาราง
+        pdf.set_font("Sarabun", "B", 10)
         for h, w in zip(headers, widths):
             pdf.cell(w, 7, h, border=1, align="C")
         y += 7
-        pdf.set_font("Sarabun", "", 10) # ลดฟอนต์ข้อมูลตาราง
+        pdf.set_font("Sarabun", "", 10)
         for row in data:
             pdf.set_xy(x, y)
             for i, (val, w) in enumerate(zip(row, widths)):
                 text_val = str(val)
-                if i == 0: # คอลัมน์แรก (ชื่อกลุ่ม/ประเภท) ชิดซ้ายและย่อคำ
+                if i == 0:
                     text_val = text_val.replace("ทางการได้ยินหรือสื่อความหมาย", "ทางการได้ยินฯ")
                     text_val = text_val.replace("ทางการเคลื่อนไหวหรือทางร่างกาย", "ทางการเคลื่อนไหวฯ")
                     text_val = text_val.replace("ทางจิตใจหรือพฤติกรรม", "ทางจิตใจฯ")
                     pdf.cell(w, 7, " " + text_val[:35], border=1, align="L")
-                else: # คอลัมน์ตัวเลข ชิดกลาง
+                else:
                     pdf.cell(w, 7, text_val[:30], border=1, align="C")
             y += 7
         return y + 4
@@ -101,7 +101,6 @@ def generate_pdf(df):
     df_child = df[df['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)'].notna() & (df['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)'] != 'ไม่มี')]
     if not df_child.empty:
         child_stats = df_child.groupby(['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)', '[1] เด็กติดผู้ต้องขัง (เพศเด็ก)']).size().reset_index(name='จำนวน')
-        # ปรับ Width รวมให้ได้ 90
         y = draw_table(col1_x, y, ["ช่วงอายุ", "เพศเด็ก", "จำนวน(คน)"], child_stats.values.tolist(), [36, 27, 27])
     else:
         y = draw_text(col1_x, y, "- ไม่มีข้อมูล -", "", 11) + 2
@@ -133,7 +132,6 @@ def generate_pdf(df):
         unreg_count = total_disabled - reg_count
         y = draw_text(col1_x, y, f"รวม: {total_disabled} คน | ขึ้นทะเบียน: {reg_count} | ยังไม่ขึ้น: {unreg_count}", "", 11)
         dis_type = df_disabled.groupby(['[3] ผู้พิการ (ระบุประเภท)', 'เพศ']).size().reset_index(name='จำนวน')
-        # ให้พื้นที่คอลัมน์ชื่อประเภทเยอะขึ้น (54mm)
         y = draw_table(col1_x, y, ["ประเภทความพิการ", "เพศ", "จำนวน(คน)"], dis_type.values.tolist(), [54, 18, 18])
     else:
         y = draw_text(col1_x, y, "- ไม่มีข้อมูล -", "", 11) + 2
@@ -152,10 +150,13 @@ def generate_pdf(df):
     df_aids = df[df['AIDS'].isin(['มี', 'ใช่'])].copy()
     if not df_aids.empty:
         total_aids = df_aids.shape[0]
-        df_aids['สถานะสิทธิ'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(lambda x: 'ยังไม่มีสิทธิ' if pd.notna(x) and str(x).strip() == 'ไม่มี' else 'มีสิทธิแล้ว')
-        no_rights_count = df_aids[df_aids['สถานะสิทธิ'] == 'ยังไม่มีสิทธิ'].shape[0]
+        # 📌 อัปเดต: ถ้าระบุว่า "ไม่มี" หรือ "เว้นว่าง" ให้นับเป็นยังไม่มีสิทธิ์
+        df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(
+            lambda x: 'ยังไม่มีสิทธิ์' if pd.isna(x) or str(x).strip() in ['ไม่มี', ''] else 'มีสิทธิ์แล้ว'
+        )
+        no_rights_count = df_aids[df_aids['สถานะสิทธิ์'] == 'ยังไม่มีสิทธิ์'].shape[0]
         has_rights_count = total_aids - no_rights_count
-        y = draw_text(col2_x, y, f"รวม: {total_aids} คน | มีสิทธิ: {has_rights_count} | ยังไม่มี: {no_rights_count}", "", 11)
+        y = draw_text(col2_x, y, f"รวม: {total_aids} คน | มีสิทธิ์: {has_rights_count} | ยังไม่มี: {no_rights_count}", "", 11)
         aids_stats = df_aids.groupby(['เพศ']).size().reset_index(name='จำนวน')
         y = draw_table(col2_x, y, ["เพศ", "จำนวน(คน)"], aids_stats.values.tolist(), [45, 45])
     else:
@@ -290,11 +291,14 @@ def generate_excel(df):
     df_aids = df[df['AIDS'].isin(['มี', 'ใช่'])].copy()
     if not df_aids.empty:
         total_aids = df_aids.shape[0]
-        df_aids['สถานะสิทธิ'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(lambda x: 'ยังไม่มีสิทธิ' if pd.notna(x) and str(x).strip() == 'ไม่มี' else 'มีสิทธิแล้ว')
-        no_rights_count = df_aids[df_aids['สถานะสิทธิ'] == 'ยังไม่มีสิทธิ'].shape[0]
+        # 📌 อัปเดต: ถ้าระบุว่า "ไม่มี" หรือ "เว้นว่าง" ให้นับเป็นยังไม่มีสิทธิ์
+        df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(
+            lambda x: 'ยังไม่มีสิทธิ์' if pd.isna(x) or str(x).strip() in ['ไม่มี', ''] else 'มีสิทธิ์แล้ว'
+        )
+        no_rights_count = df_aids[df_aids['สถานะสิทธิ์'] == 'ยังไม่มีสิทธิ์'].shape[0]
         has_rights_count = total_aids - no_rights_count
         aids_stats = df_aids.groupby(['เพศ']).size().reset_index(name='จำนวน (คน)')
-        add_table(aids_stats, f"🎗️ 6. สถิติผู้ป่วย AIDS (รวม: {total_aids} คน | มีสิทธิแล้ว: {has_rights_count} คน | ยังไม่มีสิทธิ: {no_rights_count} คน)")
+        add_table(aids_stats, f"🎗️ 6. สถิติผู้ป่วย AIDS (รวม: {total_aids} คน | มีสิทธิ์แล้ว: {has_rights_count} คน | ยังไม่มีสิทธิ์: {no_rights_count} คน)")
 
     # 7. บัตรประชาชน 
     df_has_id = df[df['บปชช'].isin(['มี', 'ใช่', 'มีบัตร'])]
@@ -475,8 +479,12 @@ st.subheader("🎗️ 6. สถิติผู้ป่วย AIDS")
 df_aids = df[df['AIDS'].isin(['มี', 'ใช่'])].copy()
 if not df_aids.empty:
     total_aids = df_aids.shape[0]
-    df_aids['สถานะสิทธิ'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(lambda x: 'ยังไม่มีสิทธิ' if pd.notna(x) and str(x).strip() == 'ไม่มี' else 'มีสิทธิแล้ว')
-    no_rights_count = df_aids[df_aids['สถานะสิทธิ'] == 'ยังไม่มีสิทธิ'].shape[0]
+    
+    # 📌 อัปเดต: ถ้าระบุว่า "ไม่มี" หรือ "เว้นว่าง" ให้นับเป็นยังไม่มีสิทธิ์โดยอัตโนมัติ
+    df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(
+        lambda x: 'ยังไม่มีสิทธิ์' if pd.isna(x) or str(x).strip() in ['ไม่มี', ''] else 'มีสิทธิ์แล้ว'
+    )
+    no_rights_count = df_aids[df_aids['สถานะสิทธิ์'] == 'ยังไม่มีสิทธิ์'].shape[0]
     has_rights_count = total_aids - no_rights_count
     
     no_rights_percent = (no_rights_count / total_aids) * 100 if total_aids > 0 else 0
@@ -489,9 +497,9 @@ if not df_aids.empty:
     
     col_pie, col_bar = st.columns(2)
     
-    sunburst_data6 = df_aids.groupby(['เพศ', 'สถานะสิทธิ']).size().reset_index(name='จำนวน')
-    fig6_1 = px.sunburst(sunburst_data6, path=['เพศ', 'สถานะสิทธิ'], values='จำนวน', color='เพศ',
-                         color_discrete_map=pie_gender_color, title="สัดส่วนสถานะสิทธิ (👉 คลิกที่กราฟเพื่อเจาะลึก)")
+    sunburst_data6 = df_aids.groupby(['เพศ', 'สถานะสิทธิ์']).size().reset_index(name='จำนวน')
+    fig6_1 = px.sunburst(sunburst_data6, path=['เพศ', 'สถานะสิทธิ์'], values='จำนวน', color='เพศ',
+                         color_discrete_map=pie_gender_color, title="สัดส่วนสถานะสิทธิ์ (👉 คลิกที่กราฟเพื่อเจาะลึก)")
     fig6_1.update_traces(textinfo='label+value+percent parent')
     col_pie.plotly_chart(fig6_1, use_container_width=True)
     
