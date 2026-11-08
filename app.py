@@ -39,8 +39,9 @@ except Exception as e:
     st.error(f"ไม่สามารถดึงข้อมูลได้ กรุณาตรวจสอบการแชร์ไฟล์: {e}")
     st.stop()
 
-# --- ธีมสีแยกเพศสำหรับกราฟทั้งหมด (ชาย=ฟ้า, หญิง=ชมพู) ---
-gender_color = {'ชาย': '#3498db', 'หญิง': '#ff66b3'}
+# --- ธีมสีแยกเพศ (แยกสำหรับ Pie และ Bar) ---
+pie_gender_color = {'ชาย': '#3498db', 'หญิง': '#ff66b3'} # สีฟ้า-ชมพู
+bar_gender_color = {'ชาย': '#2A9D8F', 'หญิง': '#E76F51'} # สีเขียวอมฟ้า-ส้มคอรัล
 
 # ------------------------------------------------
 # 2. ระบบสร้าง PDF (แบบหน้าเดียว 2 คอลัมน์)
@@ -348,10 +349,8 @@ df_child = df[df['[1] เด็กติดผู้ต้องขัง (ช�
 if not df_child.empty:
     child_stats = df_child.groupby(['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)', '[1] เด็กติดผู้ต้องขัง (เพศเด็ก)']).size().reset_index(name='จำนวน')
     child_stats['เปอร์เซ็นต์'] = (child_stats['จำนวน'] / child_stats['จำนวน'].sum() * 100).round(1)
-    
-    # ใช้งาน gender_color map
     fig1 = px.bar(child_stats, x='[1] เด็กติดผู้ต้องขัง (ช่วงวัย)', y='จำนวน', color='[1] เด็กติดผู้ต้องขัง (เพศเด็ก)', 
-                  text='เปอร์เซ็นต์', barmode='group', color_discrete_map=gender_color, title="แยกตามช่วงอายุและเพศเด็ก")
+                  text='เปอร์เซ็นต์', barmode='group', color_discrete_map=bar_gender_color, title="แยกตามช่วงอายุและเพศเด็ก")
     fig1.update_traces(texttemplate='%{text}%', textposition='outside')
     st.plotly_chart(fig1, use_container_width=True)
 else:
@@ -384,7 +383,7 @@ if not df_elderly.empty:
     elder_stats['เปอร์เซ็นต์'] = (elder_stats['จำนวน'] / elder_stats['จำนวน'].sum() * 100).round(1)
     
     fig3 = px.bar(elder_stats, x='ช่วงอายุ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', barmode='group',
-                  color_discrete_map=gender_color, title="แยกตามช่วงอายุและเพศ")
+                  color_discrete_map=bar_gender_color, title="แยกตามช่วงอายุและเพศ")
     fig3.update_traces(texttemplate='%{text}%', textposition='outside')
     st.plotly_chart(fig3, use_container_width=True)
 else:
@@ -407,9 +406,8 @@ if not df_disabled.empty:
     dis_gender = df_disabled['เพศ'].value_counts().reset_index()
     dis_gender.columns = ['เพศ', 'จำนวน']
     
-    # ใช้งาน gender_color map กับกราฟวงกลม
     fig4_1 = px.pie(dis_gender, names='เพศ', values='จำนวน', title="สัดส่วนผู้พิการ ชาย/หญิง", 
-                    hole=0.3, color='เพศ', color_discrete_map=gender_color)
+                    hole=0.3, color='เพศ', color_discrete_map=pie_gender_color)
     fig4_1.update_traces(textinfo='percent+label')
     col3.plotly_chart(fig4_1, use_container_width=True)
     
@@ -417,7 +415,7 @@ if not df_disabled.empty:
     dis_type['เปอร์เซ็นต์'] = (dis_type['จำนวน'] / dis_type['จำนวน'].sum() * 100).round(1)
     
     fig4_2 = px.bar(dis_type, x='[3] ผู้พิการ (ระบุประเภท)', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', barmode='group', 
-                    color_discrete_map=gender_color, title="แยกตามประเภท 1-7")
+                    color_discrete_map=bar_gender_color, title="แยกตามประเภท 1-7")
     fig4_2.update_traces(texttemplate='%{text}%', textposition='outside')
     col4.plotly_chart(fig4_2, use_container_width=True)
 else:
@@ -433,7 +431,7 @@ if not df_novisit.empty:
     novisit_stats['เปอร์เซ็นต์'] = (novisit_stats['จำนวน'] / novisit_stats['จำนวน'].sum() * 100).round(1)
     
     fig5 = px.bar(novisit_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="ผู้ต้องขังไม่มีญาติเยี่ยม (แยกเพศ)",
-                  color_discrete_map=gender_color)
+                  color_discrete_map=bar_gender_color)
     fig5.update_traces(texttemplate='%{text}%', textposition='outside')
     st.plotly_chart(fig5, use_container_width=True)
 else:
@@ -459,7 +457,7 @@ if not df_aids.empty:
     aids_stats['เปอร์เซ็นต์'] = (aids_stats['จำนวน'] / aids_stats['จำนวน'].sum() * 100).round(1)
     
     fig6_1 = px.bar(aids_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="ผู้ป่วย AIDS ทั้งหมด (แยกเพศ)",
-                    color_discrete_map=gender_color)
+                    color_discrete_map=bar_gender_color)
     fig6_1.update_traces(texttemplate='%{text}%', textposition='outside')
     col3.plotly_chart(fig6_1, use_container_width=True)
     
@@ -469,7 +467,7 @@ if not df_aids.empty:
         no_rights_stats['เปอร์เซ็นต์'] = (no_rights_stats['จำนวน'] / no_rights_stats['จำนวน'].sum() * 100).round(1)
         
         fig6_2 = px.bar(no_rights_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="กลุ่มผู้ป่วยที่ยังไม่มีสิทธิ์ (แยกเพศ)", 
-                        color_discrete_map=gender_color)
+                        color_discrete_map=bar_gender_color)
         fig6_2.update_traces(texttemplate='%{text}%', textposition='outside')
         col4.plotly_chart(fig6_2, use_container_width=True)
     else:
@@ -490,7 +488,6 @@ with col_pie1:
         'สถานะ': ['มีบัตรประชาชน', 'ไม่มีบัตรประชาชน'],
         'จำนวน': [df_has_id.shape[0], df_no_id.shape[0]]
     })
-    # กราฟนี้เป็นเรื่อง "สถานะ" จึงใช้สีเขียว/แดง ตามเดิมเพื่อให้สื่อความหมายได้ดี
     fig7_1 = px.pie(id_summary, names='สถานะ', values='จำนวน', title="สัดส่วนผู้มี/ไม่มีบัตร (ภาพรวม)", 
                     hole=0.4, color='สถานะ', color_discrete_map={'มีบัตรประชาชน':'#2ecc71', 'ไม่มีบัตรประชาชน':'#e74c3c'})
     fig7_1.update_traces(textinfo='percent+label')
@@ -501,35 +498,49 @@ with col_pie2:
         no_id_gender = df_no_id['เพศ'].value_counts().reset_index()
         no_id_gender.columns = ['เพศ', 'จำนวน']
         
-        # ใช้งาน gender_color map กับกราฟวงกลม
         fig7_2 = px.pie(no_id_gender, names='เพศ', values='จำนวน', title="สัดส่วนผู้ที่ไม่มีบัตร (แยกเพศ)", 
-                        hole=0.4, color='เพศ', color_discrete_map=gender_color)
+                        hole=0.4, color='เพศ', color_discrete_map=pie_gender_color)
         fig7_2.update_traces(textinfo='percent+label')
         st.plotly_chart(fig7_2, use_container_width=True)
     else:
         st.success("ผู้ต้องขังทุกคนมีบัตรประชาชนเรียบร้อยแล้ว")
 
 st.markdown("#### 🔍 กลุ่มเปราะบางที่ไม่มีบัตรประชาชน (แยกเพศ)")
+
 if not df_no_id.empty:
-    
-    def get_no_id_stats(condition):
+    def render_vul_card(title, icon, condition):
         m = df_no_id[condition & (df_no_id['เพศ'] == 'ชาย')].shape[0]
         f = df_no_id[condition & (df_no_id['เพศ'] == 'หญิง')].shape[0]
         total = m + f
         if total == 0:
-            return "0 คน"
-        pct_m = (m / total) * 100
-        pct_f = (f / total) * 100
-        return f"**{total} คน** ➔ ชาย {m} คน ({pct_m:.1f}%) | หญิง {f} คน ({pct_f:.1f}%)"
+            pct_m, pct_f = 0, 0
+        else:
+            pct_m = (m / total) * 100
+            pct_f = (f / total) * 100
+            
+        return f"""
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; text-align: center; box-shadow: 1px 1px 5px rgba(0,0,0,0.05); margin-bottom: 10px;">
+            <div style="font-size: 16px; font-weight: bold; color: #2c3e50; margin-bottom: 5px;">{icon} {title}</div>
+            <div style="font-size: 24px; font-weight: bold; color: #e74c3c; margin-bottom: 5px;">{total} <span style="font-size: 14px; font-weight: normal; color: #7f8c8d;">คน</span></div>
+            <div style="font-size: 13px; color: #34495e;">
+                <span style="color: #3498db; font-weight: 500;">ชาย {m} ({pct_m:.0f}%)</span> &nbsp;|&nbsp; 
+                <span style="color: #ff66b3; font-weight: 500;">หญิง {f} ({pct_f:.0f}%)</span>
+            </div>
+        </div>
+        """
 
     cond_disabled = (df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี')
     cond_elderly = (df_no_id['อายุ (ปี)'] >= 60)
     cond_novisit = (df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี']))
     cond_aids = (df_no_id['AIDS'].isin(['มี', 'ใช่']))
 
-    st.write(f"- ♿ **ผู้พิการ:** {get_no_id_stats(cond_disabled)}")
-    st.write(f"- 👵👴 **ผู้สูงอายุ:** {get_no_id_stats(cond_elderly)}")
-    st.write(f"- 🚫 **ไม่มีญาติเยี่ยม:** {get_no_id_stats(cond_novisit)}")
-    st.write(f"- 🎗️ **ผู้ป่วย AIDS:** {get_no_id_stats(cond_aids)}")
+    # สร้างกล่องข้อมูล 4 กล่องเรียงแนวนอน
+    col_c1, col_c2, col_c3, col_c4 = st.columns(4)
+    
+    col_c1.markdown(render_vul_card("ผู้พิการ", "♿", cond_disabled), unsafe_allow_html=True)
+    col_c2.markdown(render_vul_card("ผู้สูงอายุ", "👵👴", cond_elderly), unsafe_allow_html=True)
+    col_c3.markdown(render_vul_card("ไม่มีญาติเยี่ยม", "🚫", cond_novisit), unsafe_allow_html=True)
+    col_c4.markdown(render_vul_card("ผู้ป่วย AIDS", "🎗️", cond_aids), unsafe_allow_html=True)
+
 else:
     st.info("ไม่มีข้อมูลผู้ที่ไม่มีบัตรประชาชนให้วิเคราะห์")
