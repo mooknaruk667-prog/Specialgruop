@@ -40,8 +40,8 @@ except Exception as e:
     st.stop()
 
 # --- ธีมสีแยกเพศ (แยกสำหรับ Pie และ Bar) ---
-pie_gender_color = {'ชาย': '#3498db', 'หญิง': '#ff66b3'} # สีฟ้า-ชมพู
-bar_gender_color = {'ชาย': '#2A9D8F', 'หญิง': '#E76F51'} # สีเขียวอมฟ้า-ส้มคอรัล
+pie_gender_color = {'ชาย': '#3498db', 'หญิง': '#ff66b3'} 
+bar_gender_color = {'ชาย': '#2A9D8F', 'หญิง': '#E76F51'} 
 
 # ------------------------------------------------
 # 2. ระบบสร้าง PDF (แบบหน้าเดียว 2 คอลัมน์)
@@ -481,30 +481,30 @@ st.subheader("🪪 7. รายละเอียด บัตรประชา
 df_has_id = df[df['บปชช'].isin(['มี', 'ใช่', 'มีบัตร'])].copy()
 df_no_id = df[df['บปชช'].isin(['ไม่มี', 'ไม่มีบัตร'])].copy()
 
-col_pie1, col_pie2 = st.columns(2)
+pct_has_id = (df_has_id.shape[0] / total_inmates * 100) if total_inmates > 0 else 0
+pct_no_id = (df_no_id.shape[0] / total_inmates * 100) if total_inmates > 0 else 0
 
-with col_pie1:
-    id_summary = pd.DataFrame({
-        'สถานะ': ['มีบัตรประชาชน', 'ไม่มีบัตรประชาชน'],
-        'จำนวน': [df_has_id.shape[0], df_no_id.shape[0]]
-    })
-    fig7_1 = px.pie(id_summary, names='สถานะ', values='จำนวน', title="สัดส่วนผู้มี/ไม่มีบัตร (ภาพรวม)", 
-                    hole=0.4, color='สถานะ', color_discrete_map={'มีบัตรประชาชน':'#2ecc71', 'ไม่มีบัตรประชาชน':'#e74c3c'})
-    fig7_1.update_traces(textinfo='percent+label')
-    st.plotly_chart(fig7_1, use_container_width=True)
+col1, col2 = st.columns(2)
+col1.metric(label="ผู้ที่มีบัตรประชาชน (รวม)", value=f"{df_has_id.shape[0]} คน", delta=f"คิดเป็น {pct_has_id:.1f}%", delta_color="off")
+col2.metric(label="ผู้ที่ไม่มีบัตรประชาชน (รวม)", value=f"{df_no_id.shape[0]} คน", delta=f"คิดเป็น {pct_no_id:.1f}%", delta_color="inverse")
 
-with col_pie2:
-    if not df_no_id.empty:
-        no_id_gender = df_no_id['เพศ'].value_counts().reset_index()
-        no_id_gender.columns = ['เพศ', 'จำนวน']
-        
-        fig7_2 = px.pie(no_id_gender, names='เพศ', values='จำนวน', title="สัดส่วนผู้ที่ไม่มีบัตร (แยกเพศ)", 
-                        hole=0.4, color='เพศ', color_discrete_map=pie_gender_color)
-        fig7_2.update_traces(textinfo='percent+label')
-        st.plotly_chart(fig7_2, use_container_width=True)
-    else:
-        st.success("ผู้ต้องขังทุกคนมีบัตรประชาชนเรียบร้อยแล้ว")
+# --- กราฟวงกลม Sunburst Chart (Interactive) ---
+df_sunburst = df[df['บปชช'].isin(['มี', 'ใช่', 'มีบัตร', 'ไม่มี', 'ไม่มีบัตร'])].copy()
+df_sunburst['สถานะบัตร'] = df_sunburst['บปชช'].apply(lambda x: 'มีบัตรประชาชน' if x in ['มี', 'ใช่', 'มีบัตร'] else 'ไม่มีบัตรประชาชน')
+sunburst_data = df_sunburst.groupby(['สถานะบัตร', 'เพศ']).size().reset_index(name='จำนวน')
 
+fig7 = px.sunburst(
+    sunburst_data, 
+    path=['สถานะบัตร', 'เพศ'], 
+    values='จำนวน',
+    color='สถานะบัตร',
+    color_discrete_map={'มีบัตรประชาชน': '#2ecc71', 'ไม่มีบัตรประชาชน': '#e74c3c'},
+    title="สัดส่วนสถานะบัตรและเพศ (👉 คลิกที่กราฟวงกลมแต่ละฝั่งเพื่อเจาะลึกดูเพศ)"
+)
+fig7.update_traces(textinfo="label+value+percent parent")
+st.plotly_chart(fig7, use_container_width=True)
+
+# --- ข้อมูลกลุ่มเปราะบางแบบ Card (แนวนอน) ---
 st.markdown("#### 🔍 กลุ่มเปราะบางที่ไม่มีบัตรประชาชน (แยกเพศ)")
 
 if not df_no_id.empty:
@@ -534,7 +534,6 @@ if not df_no_id.empty:
     cond_novisit = (df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี']))
     cond_aids = (df_no_id['AIDS'].isin(['มี', 'ใช่']))
 
-    # สร้างกล่องข้อมูล 4 กล่องเรียงแนวนอน
     col_c1, col_c2, col_c3, col_c4 = st.columns(4)
     
     col_c1.markdown(render_vul_card("ผู้พิการ", "♿", cond_disabled), unsafe_allow_html=True)
