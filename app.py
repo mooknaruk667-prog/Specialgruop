@@ -13,7 +13,7 @@ from datetime import datetime
 # ------------------------------------------------
 # 1. ตั้งค่าหน้าเพจ & ระบบดึงข้อมูลและฟอนต์
 # ------------------------------------------------
-st.set_page_config(page_title="แดชบอร์ดกลุ่มเปราะบาง", layout="wide")
+st.set_page_config(page_title="Dashboard กลุ่มเปราะบาง", layout="wide")
 
 @st.cache_data(ttl=600)
 def load_data():
@@ -63,11 +63,11 @@ def generate_pdf(df):
     pdf.add_font("Sarabun", style="B", fname="Sarabun-Bold.ttf")
     
     pdf.set_font("Sarabun", "B", 18)
-    pdf.cell(0, 10, "รายงานสรุปสถิติผู้ต้องขังกลุ่มเปราะบาง", new_x="LMARGIN", new_y="NEXT", align="C")
+    pdf.cell(0, 10, "รายงานสรุปสถิติผู้ต้องขังกลุ่มเปราะบาง เรือนจำจังหวัดบุรีรัมย์", new_x="LMARGIN", new_y="NEXT", align="C")
     
     months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
     now = datetime.now()
-    date_str = f"ข้อมูล ณ วันที่ {now.day} {months[now.month-1]} {now.year}"
+    date_str = f"ข้อมูล ณ วันที่ {now.day} {months[now.month-1]} {now.year + 543}"
     
     pdf.set_font("Sarabun", "", 12)
     pdf.cell(0, 6, date_str, new_x="LMARGIN", new_y="NEXT", align="C")
@@ -159,7 +159,6 @@ def generate_pdf(df):
     df_aids = df[df['AIDS'].isin(['มี', 'ใช่'])].copy()
     if not df_aids.empty:
         total_aids = df_aids.shape[0]
-        # ดึงฟังก์ชันช่วยตรวจสอบมาใช้
         df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(check_no_rights)
         no_rights_count = df_aids[df_aids['สถานะสิทธิ์'] == 'ยังไม่มีสิทธิ์'].shape[0]
         has_rights_count = total_aids - no_rights_count
@@ -230,9 +229,11 @@ def generate_excel(df):
 
     months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
     now = datetime.now()
-    ws.cell(row=2, column=2, value=f"ข้อมูล ณ วันที่ {now.day} {months[now.month-1]} {now.year}").font = Font(name='Tahoma', size=11, italic=True)
+    
+    ws.cell(row=2, column=2, value="รายงานสรุปสถิติผู้ต้องขังกลุ่มเปราะบาง เรือนจำจังหวัดบุรีรัมย์").font = title_font
+    ws.cell(row=3, column=2, value=f"ข้อมูล ณ วันที่ {now.day} {months[now.month-1]} {now.year + 543}").font = Font(name='Tahoma', size=11, italic=True)
 
-    current_row = [4]
+    current_row = [5]
     def add_table(df_summary, title):
         cell = ws.cell(row=current_row[0], column=2, value=title)
         cell.font = title_font
@@ -357,7 +358,7 @@ def generate_excel(df):
 # ------------------------------------------------
 # UI: ส่วนแสดงผล Streamlit
 # ------------------------------------------------
-st.title("📊 แดชบอร์ดสถิติผู้ต้องขังกลุ่มเปราะบาง")
+st.title("📊 Dashboard กลุ่มเปราะบาง")
 
 col_dl1, col_dl2, _ = st.columns([1, 1, 2])
 with col_dl1:
@@ -484,7 +485,6 @@ df_aids = df[df['AIDS'].isin(['มี', 'ใช่'])].copy()
 if not df_aids.empty:
     total_aids = df_aids.shape[0]
     
-    # 📌 นำฟังก์ชัน check_no_rights มาใช้ตรวจจับคำว่า "ไม่มี" และ "เว้นว่าง"
     df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(check_no_rights)
     
     no_rights_count = df_aids[df_aids['สถานะสิทธิ์'] == 'ยังไม่มีสิทธิ์'].shape[0]
