@@ -52,7 +52,7 @@ st.markdown("---")
 # 2. จำนวนผู้ต้องขังหญิงตั้งครรภ์
 # ------------------------------------------------
 st.subheader("🤰 2. สถิติผู้ต้องขังหญิงตั้งครรภ์")
-# แก้บั๊ก: ใช้ .isin() เพื่อตรวจสอบคำว่า "ใช่" หรือ "มี" แบบตรงตัว (ป้องกันการนับคำว่า "ไม่มี")
+# ตรวจสอบคำว่า "ใช่" หรือ "มี" แบบตรงตัว
 pregnant_count = df[df['[2] หญิงตั้งครรภ์ (ใช่/ไม่ใช่)'].isin(['ใช่', 'มี'])].shape[0]
 st.metric(label="จำนวนหญิงตั้งครรภ์ทั้งหมด", value=f"{pregnant_count} คน")
 
@@ -66,7 +66,19 @@ df['อายุ (ปี)'] = pd.to_numeric(df['อายุ (ปี)'], errors=
 df_elderly = df[df['อายุ (ปี)'] >= 60].copy()
 
 if not df_elderly.empty:
-    st.metric(label="ผู้สูงอายุรวมทั้งหมด", value=f"{df_elderly.shape[0]} คน")
+    total_elderly = df_elderly.shape[0]
+    
+    # คำนวณผู้ที่ยังไม่ได้รับเบี้ยสูงอายุ (ตรวจสอบจากช่องเบี้ยสูงอายุ ว่าไม่ใช่คำว่า "ได้รับ")
+    has_allowance = df_elderly['เบี้ยสูงอายุ'].isin(['ได้รับ', 'มี', 'ใช่'])
+    no_allowance_count = (~has_allowance).sum()
+    no_allowance_percent = (no_allowance_count / total_elderly) * 100
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(label="ผู้สูงอายุรวมทั้งหมด", value=f"{total_elderly} คน")
+    with col2:
+        # แสดงจำนวนผู้ที่ยังไม่ได้รับ พร้อมเปอร์เซ็นต์
+        st.metric(label="ยังไม่ได้รับเบี้ยผู้สูงอายุ", value=f"{no_allowance_count} คน", delta=f"คิดเป็น {no_allowance_percent:.1f}%", delta_color="off")
     
     # แบ่งช่วงอายุตามต้องการ
     bins = [59, 69, 79, float('inf')]
@@ -98,7 +110,7 @@ if not df_disabled.empty:
     with col1:
         st.metric(label="ผู้พิการรวมทั้งหมด", value=f"{df_disabled.shape[0]} คน")
     with col2:
-        # แก้บั๊ก: ใช้ .isin() ตรวจสอบสถานะบัตรคนพิการว่าเป็น "มี" หรือ "ใช่" แบบตรงตัว
+        # ตรวจสอบสถานะบัตรคนพิการว่าเป็น "มี" หรือ "ใช่" แบบตรงตัว
         reg_count = df_disabled[df_disabled['สถานะบัตรคนพิการ'].isin(['มี', 'ใช่'])].shape[0]
         st.metric(label="ขึ้นทะเบียนสิทธิ์ (มีบัตร) แล้ว", value=f"{reg_count} คน")
     
@@ -128,7 +140,7 @@ st.markdown("---")
 # 5. สถิติผู้ต้องขังไม่มีญาติเยี่ยม
 # ------------------------------------------------
 st.subheader("🚫 5. สถิติผู้ต้องขังไม่มีญาติเยี่ยม")
-# แก้บั๊ก: ใช้ .isin() ตรวจสอบว่า "ใช่", "ไม่มี", หรือ "ไม่มีญาติเยี่ยม" แบบตรงตัว
+# ตรวจสอบว่า "ใช่", "ไม่มี", หรือ "ไม่มีญาติเยี่ยม" แบบตรงตัว
 df_novisit = df[df['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มี', 'ไม่มีญาติเยี่ยม'])].copy()
 
 if not df_novisit.empty:
