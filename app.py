@@ -9,7 +9,7 @@ st.set_page_config(page_title="แดชบอร์ดกลุ่มเปร�
 
 @st.cache_data(ttl=600)  # ดึงข้อมูลใหม่ทุกๆ 10 นาที
 def load_data():
-    # ใส่ ID ชีตของคุณ
+    # ID ชีตสถิติผู้ต้องขังกลุ่มเปราะบาง
     sheet_id = "1YRt4MqgSE5kS2ZHMn--COpWPDpCJjNd6AzmljG08-NI"
     csv_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv"
     
@@ -52,8 +52,8 @@ st.markdown("---")
 # 2. จำนวนผู้ต้องขังหญิงตั้งครรภ์
 # ------------------------------------------------
 st.subheader("🤰 2. สถิติผู้ต้องขังหญิงตั้งครรภ์")
-# กรองเฉพาะคนที่ติ๊ก "ใช่" หรือ "มี" 
-pregnant_count = df[df['[2] หญิงตั้งครรภ์ (ใช่/ไม่ใช่)'].astype(str).str.contains('ใช่|มี', na=False)].shape[0]
+# แก้บั๊ก: ใช้ .isin() เพื่อตรวจสอบคำว่า "ใช่" หรือ "มี" แบบตรงตัว (ป้องกันการนับคำว่า "ไม่มี")
+pregnant_count = df[df['[2] หญิงตั้งครรภ์ (ใช่/ไม่ใช่)'].isin(['ใช่', 'มี'])].shape[0]
 st.metric(label="จำนวนหญิงตั้งครรภ์ทั้งหมด", value=f"{pregnant_count} คน")
 
 st.markdown("---")
@@ -68,7 +68,7 @@ df_elderly = df[df['อายุ (ปี)'] >= 60].copy()
 if not df_elderly.empty:
     st.metric(label="ผู้สูงอายุรวมทั้งหมด", value=f"{df_elderly.shape[0]} คน")
     
-    # แบ่งช่วงอายุตามที่คุณต้องการ
+    # แบ่งช่วงอายุตามต้องการ
     bins = [59, 69, 79, float('inf')]
     labels = ['60-69 ปี', '70-79 ปี', '80 ปีขึ้นไป']
     df_elderly['ช่วงอายุ'] = pd.cut(df_elderly['อายุ (ปี)'], bins=bins, labels=labels)
@@ -98,8 +98,8 @@ if not df_disabled.empty:
     with col1:
         st.metric(label="ผู้พิการรวมทั้งหมด", value=f"{df_disabled.shape[0]} คน")
     with col2:
-        # ขึ้นทะเบียน (สถานะบัตรคนพิการไม่ใช่คำว่า "ไม่มี" หรือค่าว่าง)
-        reg_count = df_disabled[df_disabled['สถานะบัตรคนพิการ'].astype(str).str.contains('มี', na=False)].shape[0]
+        # แก้บั๊ก: ใช้ .isin() ตรวจสอบสถานะบัตรคนพิการว่าเป็น "มี" หรือ "ใช่" แบบตรงตัว
+        reg_count = df_disabled[df_disabled['สถานะบัตรคนพิการ'].isin(['มี', 'ใช่'])].shape[0]
         st.metric(label="ขึ้นทะเบียนสิทธิ์ (มีบัตร) แล้ว", value=f"{reg_count} คน")
     
     col3, col4 = st.columns(2)
@@ -128,7 +128,8 @@ st.markdown("---")
 # 5. สถิติผู้ต้องขังไม่มีญาติเยี่ยม
 # ------------------------------------------------
 st.subheader("🚫 5. สถิติผู้ต้องขังไม่มีญาติเยี่ยม")
-df_novisit = df[df['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].astype(str).str.contains('ใช่|ไม่มี', na=False)].copy()
+# แก้บั๊ก: ใช้ .isin() ตรวจสอบว่า "ใช่", "ไม่มี", หรือ "ไม่มีญาติเยี่ยม" แบบตรงตัว
+df_novisit = df[df['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มี', 'ไม่มีญาติเยี่ยม'])].copy()
 
 if not df_novisit.empty:
     novisit_stats = df_novisit['เพศ'].value_counts().reset_index()
