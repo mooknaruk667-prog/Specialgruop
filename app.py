@@ -442,23 +442,30 @@ if not df_disabled.empty:
     col2.metric(label="ขึ้นทะเบียนสิทธิ์แล้ว", value=f"{reg_count} คน", delta=f"คิดเป็น {reg_percent:.1f}%", delta_color="off")
     col3.metric(label="ยังไม่ขึ้นทะเบียนสิทธิ์", value=f"{unreg_count} คน", delta=f"คิดเป็น {unreg_percent:.1f}%", delta_color="inverse")
     
-    col_pie, col_bar = st.columns(2)
+    col_pie1, col_bar2 = st.columns(2)
     
     df_disabled['สถานะการขึ้นทะเบียน'] = df_disabled['สถานะบัตรคนพิการ'].apply(lambda x: 'ขึ้นทะเบียนแล้ว' if pd.notna(x) and str(x).strip() in ['มี', 'ใช่'] else 'ยังไม่ขึ้นทะเบียน')
     
     sunburst_data4 = df_disabled.groupby(['เพศ', 'สถานะการขึ้นทะเบียน']).size().reset_index(name='จำนวน')
     fig4_1 = px.sunburst(sunburst_data4, path=['เพศ', 'สถานะการขึ้นทะเบียน'], values='จำนวน', color='เพศ', 
-                         color_discrete_map=pie_gender_color, title="สัดส่วนสถานะการขึ้นทะเบียน (👉 คลิกที่กราฟเพื่อเจาะลึก)")
+                         color_discrete_map=pie_gender_color, title="สัดส่วนสถานะการขึ้นทะเบียน (👉 คลิกเพื่อเจาะลึก)")
     fig4_1.update_traces(textinfo='label+value+percent parent')
-    col_pie.plotly_chart(fig4_1, use_container_width=True)
+    col_pie1.plotly_chart(fig4_1, use_container_width=True)
     
+    # 📌 เปลี่ยนเป็นกราฟแท่งแนวนอน (Horizontal Bar Chart)
     dis_type = df_disabled.groupby(['[3] ผู้พิการ (ระบุประเภท)', 'เพศ']).size().reset_index(name='จำนวน')
-    dis_type['เปอร์เซ็นต์'] = (dis_type['จำนวน'] / dis_type['จำนวน'].sum() * 100).round(1)
     
-    fig4_2 = px.bar(dis_type, x='[3] ผู้พิการ (ระบุประเภท)', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', barmode='group', 
-                    color_discrete_map=bar_gender_color, title="แยกตามประเภท 1-7")
-    fig4_2.update_traces(texttemplate='%{text}%', textposition='outside')
-    col_bar.plotly_chart(fig4_2, use_container_width=True)
+    # เรียงลำดับเพื่อให้แท่งที่ยาวที่สุดอยู่ด้านบน
+    dis_type_sort = dis_type.groupby('[3] ผู้พิการ (ระบุประเภท)')['จำนวน'].sum().reset_index()
+    dis_type_sort = dis_type_sort.sort_values(by='จำนวน', ascending=True)
+    dis_type['[3] ผู้พิการ (ระบุประเภท)'] = pd.Categorical(dis_type['[3] ผู้พิการ (ระบุประเภท)'], categories=dis_type_sort['[3] ผู้พิการ (ระบุประเภท)'], ordered=True)
+    dis_type = dis_type.sort_values('[3] ผู้พิการ (ระบุประเภท)')
+    
+    fig4_2 = px.bar(dis_type, x='จำนวน', y='[3] ผู้พิการ (ระบุประเภท)', color='เพศ', orientation='h', barmode='group', 
+                    color_discrete_map=bar_gender_color, title="แยกตามประเภทความพิการ", text='จำนวน')
+    fig4_2.update_traces(textposition='outside')
+    fig4_2.update_layout(yaxis_title=None)
+    col_bar2.plotly_chart(fig4_2, use_container_width=True)
 else:
     st.info("ไม่มีข้อมูลผู้พิการ")
 st.markdown("---")
@@ -486,7 +493,6 @@ if not df_aids.empty:
     total_aids = df_aids.shape[0]
     
     df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(check_no_rights)
-    
     no_rights_count = df_aids[df_aids['สถานะสิทธิ์'] == 'ยังไม่มีสิทธิ์'].shape[0]
     has_rights_count = total_aids - no_rights_count
     
@@ -498,22 +504,13 @@ if not df_aids.empty:
     col2.metric(label="มีสิทธิ์แล้ว", value=f"{has_rights_count} คน", delta=f"คิดเป็น {has_rights_percent:.1f}%", delta_color="off")
     col3.metric(label="ยังไม่มีสิทธิ์", value=f"{no_rights_count} คน", delta=f"คิดเป็น {no_rights_percent:.1f}%", delta_color="inverse")
     
-    col_pie, col_bar = st.columns(2)
+    _, col_pie, _ = st.columns([1, 2, 1])
     
     sunburst_data6 = df_aids.groupby(['เพศ', 'สถานะสิทธิ์']).size().reset_index(name='จำนวน')
     fig6_1 = px.sunburst(sunburst_data6, path=['เพศ', 'สถานะสิทธิ์'], values='จำนวน', color='เพศ',
                          color_discrete_map=pie_gender_color, title="สัดส่วนสถานะสิทธิ์ (👉 คลิกที่กราฟเพื่อเจาะลึก)")
     fig6_1.update_traces(textinfo='label+value+percent parent')
     col_pie.plotly_chart(fig6_1, use_container_width=True)
-    
-    aids_stats = df_aids['เพศ'].value_counts().reset_index()
-    aids_stats.columns = ['เพศ', 'จำนวน']
-    aids_stats['เปอร์เซ็นต์'] = (aids_stats['จำนวน'] / aids_stats['จำนวน'].sum() * 100).round(1)
-    
-    fig6_2 = px.bar(aids_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="ผู้ป่วย AIDS ทั้งหมด (แยกเพศ)",
-                    color_discrete_map=bar_gender_color)
-    fig6_2.update_traces(texttemplate='%{text}%', textposition='outside')
-    col_bar.plotly_chart(fig6_2, use_container_width=True)
 else:
     st.info("ไม่มีข้อมูลผู้ป่วย AIDS")
 st.markdown("---")
