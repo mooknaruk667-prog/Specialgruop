@@ -34,6 +34,7 @@ def load_fonts():
 try:
     df = load_data()
     df['อายุ (ปี)'] = pd.to_numeric(df['อายุ (ปี)'], errors='coerce')
+    total_inmates = df.shape[0] # จำนวนผู้ต้องขังทั้งหมด
 except Exception as e:
     st.error(f"ไม่สามารถดึงข้อมูลได้ กรุณาตรวจสอบการแชร์ไฟล์: {e}")
     st.stop()
@@ -48,11 +49,9 @@ def generate_pdf(df):
     pdf.add_font("Sarabun", style="", fname="Sarabun-Regular.ttf")
     pdf.add_font("Sarabun", style="B", fname="Sarabun-Bold.ttf")
     
-    # --- หัวกระดาษ ---
     pdf.set_font("Sarabun", "B", 18)
     pdf.cell(0, 10, "รายงานสรุปสถิติผู้ต้องขังกลุ่มเปราะบาง", new_x="LMARGIN", new_y="NEXT", align="C")
     
-    # --- วันที่ส่งออก ---
     months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
     now = datetime.now()
     date_str = f"ข้อมูล ณ วันที่ {now.day} {months[now.month-1]} {now.year}"
@@ -61,7 +60,6 @@ def generate_pdf(df):
     pdf.cell(0, 6, date_str, new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.ln(4)
     
-    # --- ฟังก์ชันช่วยวาดข้อความและตารางแบบกำหนดจุด (X, Y) ---
     def draw_text(x, y, text, style="", size=12):
         pdf.set_xy(x, y)
         pdf.set_font("Sarabun", style, size)
@@ -84,11 +82,10 @@ def generate_pdf(df):
 
     col1_x = 10     
     col2_x = 110    
-    y_start = pdf.get_y() # จุดเริ่มต้นใต้หัวกระดาษและวันที่
+    y_start = pdf.get_y()
     
     # ================= คอลัมน์ 1 (ซ้าย) =================
     y = y_start
-    
     y = draw_text(col1_x, y, "1. สถิติเด็กติดผู้ต้องขัง", "B", 14)
     df_child = df[df['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)'].notna() & (df['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)'] != 'ไม่มี')]
     if not df_child.empty:
@@ -128,7 +125,6 @@ def generate_pdf(df):
         
     # ================= คอลัมน์ 2 (ขวา) =================
     y = y_start
-    
     y = draw_text(col2_x, y, "5. สถิติผู้ต้องขังไม่มีญาติเยี่ยม", "B", 14)
     df_novisit = df[df['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])]
     if not df_novisit.empty:
@@ -147,27 +143,44 @@ def generate_pdf(df):
     else:
         y = draw_text(col2_x, y, "- ไม่มีข้อมูล -", "", 12) + 2
         
-    y = draw_text(col2_x, y, "7. รายละเอียดบัตรประชาชน", "B", 14)
+    y = draw_text(col2_x, y, "7. รายละเอียด บัตรประชาชน กลุ่มเปราะบาง", "B", 14)
     df_has_id = df[df['บปชช'].isin(['มี', 'ใช่', 'มีบัตร'])]
     df_no_id = df[df['บปชช'].isin(['ไม่มี', 'ไม่มีบัตร'])]
+    pct_no_id = (df_no_id.shape[0] / total_inmates * 100) if total_inmates > 0 else 0
+    
     y = draw_text(col2_x, y, f"ผู้ที่มีบัตรประชาชนรวม: {df_has_id.shape[0]} คน", "", 12)
-    y = draw_text(col2_x, y, f"ผู้ที่ไม่มีบัตรประชาชนรวม: {df_no_id.shape[0]} คน", "", 12)
+    y = draw_text(col2_x, y, f"ผู้ที่ไม่มีบัตรประชาชนรวม: {df_no_id.shape[0]} คน (คิดเป็น {pct_no_id:.1f}%)", "", 12)
     
     if not df_no_id.empty:
         y += 2
-        y = draw_text(col2_x, y, "กลุ่มเปราะบางที่ไม่มีบัตรประชาชน:", "B", 12)
-        no_id_disabled = df_no_id[df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna() & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี')].shape[0]
-        no_id_elderly = df_no_id[df_no_id['อายุ (ปี)'] >= 60].shape[0]
-        no_id_novisit = df_no_id[df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])].shape[0]
-        no_id_aids = df_no_id[df_no_id['AIDS'].isin(['มี', 'ใช่'])].shape[0]
+        y = draw_text(col2_x, y, "กลุ่มเปราะบางที่ไม่มีบัตรประชาชน (แยกเพศ):", "B", 12)
+        
+        # คำนวณแยกเพศ
+        disabled_m = df_no_id[(df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี') & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+        disabled_f = df_no_id[(df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี') & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+        
+        elderly_m = df_no_id[(df_no_id['อายุ (ปี)'] >= 60) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+        elderly_f = df_no_id[(df_no_id['อายุ (ปี)'] >= 60) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+        
+        novisit_m = df_no_id[(df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+        novisit_f = df_no_id[(df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+        
+        aids_m = df_no_id[(df_no_id['AIDS'].isin(['มี', 'ใช่'])) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+        aids_f = df_no_id[(df_no_id['AIDS'].isin(['มี', 'ใช่'])) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
         
         data = [
-            ["ผู้พิการ", no_id_disabled],
-            ["ผู้สูงอายุ", no_id_elderly],
-            ["ไม่มีญาติเยี่ยม", no_id_novisit],
-            ["ผู้ป่วย AIDS", no_id_aids]
+            ["ผู้พิการ", disabled_m, disabled_f, disabled_m + disabled_f],
+            ["ผู้สูงอายุ", elderly_m, elderly_f, elderly_m + elderly_f],
+            ["ไม่มีญาติ", novisit_m, novisit_f, novisit_m + novisit_f],
+            ["ผู้ป่วย AIDS", aids_m, aids_f, aids_m + aids_f]
         ]
-        y = draw_table(col2_x, y, ["กลุ่มเปราะบาง", "จำนวน(คน)"], data, [55, 35])
+        # กรองเฉพาะกลุ่มที่มีคนไม่มีบัตร > 0
+        data = [r for r in data if r[3] > 0]
+        
+        if data:
+            y = draw_table(col2_x, y, ["กลุ่ม", "ชาย", "หญิง", "รวม"], data, [36, 18, 18, 18])
+        else:
+            y = draw_text(col2_x, y, "- ไม่มีข้อมูล -", "", 12) + 2
         
     return pdf.output()
 
@@ -188,7 +201,6 @@ def generate_excel(df):
         top=Side(style='thin', color='BDC3C7'), bottom=Side(style='thin', color='BDC3C7')
     )
 
-    # เพิ่มวันที่ส่งออกบนหัวกระดาษ Excel ด้วย
     months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
     now = datetime.now()
     ws.cell(row=2, column=2, value=f"ข้อมูล ณ วันที่ {now.day} {months[now.month-1]} {now.year}").font = Font(name='Tahoma', size=11, italic=True)
@@ -218,18 +230,16 @@ def generate_excel(df):
             current_row[0] += 1
         current_row[0] += 2
 
-    # 1. เด็ก
+    # 1 - 6
     df_child = df[df['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)'].notna() & (df['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)'] != 'ไม่มี')]
     if not df_child.empty:
         child_stats = df_child.groupby(['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)', '[1] เด็กติดผู้ต้องขัง (เพศเด็ก)']).size().reset_index(name='จำนวน (คน)')
         child_stats.columns = ['ช่วงอายุ', 'เพศเด็ก', 'จำนวน (คน)']
         add_table(child_stats, "👶 1. สถิติเด็กติดผู้ต้องขัง")
 
-    # 2. ครรภ์
     pregnant_count = df[df['[2] หญิงตั้งครรภ์ (ใช่/ไม่ใช่)'].isin(['ใช่', 'มี'])].shape[0]
     add_table(pd.DataFrame([{'กลุ่มเปราะบาง': 'หญิงตั้งครรภ์', 'จำนวน (คน)': pregnant_count}]), "🤰 2. สถิติผู้ต้องขังหญิงตั้งครรภ์")
 
-    # 3. สูงอายุ
     df_elderly = df[df['อายุ (ปี)'] >= 60].copy()
     if not df_elderly.empty:
         has_allowance = df_elderly['เบี้ยสูงอายุ'].isin(['ได้รับ', 'มี', 'ใช่'])
@@ -241,7 +251,6 @@ def generate_excel(df):
         elder_stats = elder_stats[elder_stats['จำนวน (คน)'] > 0]
         add_table(elder_stats, f"👵👴 3. สถิติผู้ต้องขังสูงอายุ (รวม: {df_elderly.shape[0]} คน | ยังไม่ได้รับเบี้ย: {no_allowance_count} คน)")
 
-    # 4. พิการ
     df_disabled = df[df['[3] ผู้พิการ (ระบุประเภท)'].notna() & (df['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี')]
     if not df_disabled.empty:
         reg_count = df_disabled[df_disabled['สถานะบัตรคนพิการ'].isin(['มี', 'ใช่'])].shape[0]
@@ -249,42 +258,56 @@ def generate_excel(df):
         dis_type.columns = ['ประเภทความพิการ', 'เพศ', 'จำนวน (คน)']
         add_table(dis_type, f"♿ 4. สถิติผู้พิการ (รวม: {df_disabled.shape[0]} คน | ขึ้นทะเบียนแล้ว: {reg_count} คน)")
 
-    # 5. ไม่มีญาติ
     df_novisit = df[df['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])]
     if not df_novisit.empty:
         novisit_stats = df_novisit.groupby(['เพศ']).size().reset_index(name='จำนวน (คน)')
         add_table(novisit_stats, "🚫 5. สถิติผู้ต้องขังไม่มีญาติเยี่ยม")
 
-    # 6. AIDS
     df_aids = df[df['AIDS'].isin(['มี', 'ใช่'])]
     if not df_aids.empty:
         no_rights = df_aids[df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].isin(['ไม่มี'])].shape[0]
         aids_stats = df_aids.groupby(['เพศ']).size().reset_index(name='จำนวน (คน)')
         add_table(aids_stats, f"🎗️ 6. สถิติผู้ป่วย AIDS (รวม: {df_aids.shape[0]} คน | ยังไม่มีสิทธิ: {no_rights} คน)")
 
-    # 7. บัตรประชาชน
+    # 7. บัตรประชาชน (เพิ่มคอลัมน์เปอร์เซ็นต์ใน Excel)
     df_has_id = df[df['บปชช'].isin(['มี', 'ใช่', 'มีบัตร'])]
     df_no_id = df[df['บปชช'].isin(['ไม่มี', 'ไม่มีบัตร'])]
+    pct_has_id = (df_has_id.shape[0] / total_inmates * 100) if total_inmates > 0 else 0
+    pct_no_id = (df_no_id.shape[0] / total_inmates * 100) if total_inmates > 0 else 0
+    
     add_table(pd.DataFrame([
-        {'สถานะ': 'มีบัตรประจำตัวประชาชน', 'จำนวน (คน)': df_has_id.shape[0]},
-        {'สถานะ': 'ไม่มีบัตรประจำตัวประชาชน', 'จำนวน (คน)': df_no_id.shape[0]}
-    ]), "🪪 7. รายละเอียดบัตรประชาชน")
+        {'สถานะ': 'มีบัตรประจำตัวประชาชน', 'จำนวน (คน)': df_has_id.shape[0], 'เปอร์เซ็นต์': f"{pct_has_id:.1f}%"},
+        {'สถานะ': 'ไม่มีบัตรประจำตัวประชาชน', 'จำนวน (คน)': df_no_id.shape[0], 'เปอร์เซ็นต์': f"{pct_no_id:.1f}%"}
+    ]), "🪪 7. รายละเอียด บัตรประชาชน กลุ่มเปราะบาง")
 
     if not df_no_id.empty:
-        no_id_disabled = df_no_id[df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna() & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี')].shape[0]
-        no_id_elderly = df_no_id[df_no_id['อายุ (ปี)'] >= 60].shape[0]
-        no_id_novisit = df_no_id[df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])].shape[0]
-        no_id_aids = df_no_id[df_no_id['AIDS'].isin(['มี', 'ใช่'])].shape[0]
-        add_table(pd.DataFrame([
-            {'กลุ่มเปราะบางที่ไม่มีบัตร': 'ผู้พิการ', 'จำนวน (คน)': no_id_disabled},
-            {'กลุ่มเปราะบางที่ไม่มีบัตร': 'ผู้สูงอายุ', 'จำนวน (คน)': no_id_elderly},
-            {'กลุ่มเปราะบางที่ไม่มีบัตร': 'ไม่มีญาติเยี่ยม', 'จำนวน (คน)': no_id_novisit},
-            {'กลุ่มเปราะบางที่ไม่มีบัตร': 'ผู้ป่วย AIDS', 'จำนวน (คน)': no_id_aids}
-        ]), "🔍 กลุ่มเปราะบางที่ไม่มีบัตรประชาชน")
+        disabled_m = df_no_id[(df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี') & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+        disabled_f = df_no_id[(df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี') & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+        
+        elderly_m = df_no_id[(df_no_id['อายุ (ปี)'] >= 60) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+        elderly_f = df_no_id[(df_no_id['อายุ (ปี)'] >= 60) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+        
+        novisit_m = df_no_id[(df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+        novisit_f = df_no_id[(df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+        
+        aids_m = df_no_id[(df_no_id['AIDS'].isin(['มี', 'ใช่'])) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+        aids_f = df_no_id[(df_no_id['AIDS'].isin(['มี', 'ใช่'])) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+        
+        df_vul_excel = pd.DataFrame([
+            {'กลุ่มเปราะบางที่ไม่มีบัตร': 'ผู้พิการ', 'ชาย (คน)': disabled_m, 'หญิง (คน)': disabled_f, 'รวม (คน)': disabled_m + disabled_f},
+            {'กลุ่มเปราะบางที่ไม่มีบัตร': 'ผู้สูงอายุ', 'ชาย (คน)': elderly_m, 'หญิง (คน)': elderly_f, 'รวม (คน)': elderly_m + elderly_f},
+            {'กลุ่มเปราะบางที่ไม่มีบัตร': 'ไม่มีญาติเยี่ยม', 'ชาย (คน)': novisit_m, 'หญิง (คน)': novisit_f, 'รวม (คน)': novisit_m + novisit_f},
+            {'กลุ่มเปราะบางที่ไม่มีบัตร': 'ผู้ป่วย AIDS', 'ชาย (คน)': aids_m, 'หญิง (คน)': aids_f, 'รวม (คน)': aids_m + aids_f}
+        ])
+        # ซ่อนกลุ่มที่ไม่มีข้อมูล
+        df_vul_excel = df_vul_excel[df_vul_excel['รวม (คน)'] > 0]
+        
+        add_table(df_vul_excel, "🔍 กลุ่มเปราะบางที่ไม่มีบัตรประชาชน (แยกเพศ)")
 
-    ws.column_dimensions['B'].width = 45
-    ws.column_dimensions['C'].width = 18
-    ws.column_dimensions['D'].width = 18
+    ws.column_dimensions['B'].width = 35
+    ws.column_dimensions['C'].width = 15
+    ws.column_dimensions['D'].width = 15
+    ws.column_dimensions['E'].width = 15
     ws.sheet_view.showGridLines = False
 
     ws_raw = wb.create_sheet(title="Raw Data (ข้อมูลดิบ)")
@@ -301,15 +324,11 @@ def generate_excel(df):
 # ------------------------------------------------
 st.title("📊 แดชบอร์ดสถิติผู้ต้องขังกลุ่มเปราะบาง")
 
-# ปุ่มดาวน์โหลด PDF และ Excel
-pdf_bytes = generate_pdf(df)
-excel_bytes = generate_excel(df)
-
 col_dl1, col_dl2, _ = st.columns([1, 1, 2])
 with col_dl1:
     st.download_button(
         label="📥 ดาวน์โหลดรายงาน (PDF)",
-        data=bytes(pdf_bytes),
+        data=bytes(generate_pdf(df)),
         file_name="สรุปสถิติกลุ่มเปราะบาง.pdf",
         mime="application/pdf",
         type="primary"
@@ -317,7 +336,7 @@ with col_dl1:
 with col_dl2:
     st.download_button(
         label="📥 ดาวน์โหลดตาราง (Excel)",
-        data=excel_bytes,
+        data=generate_excel(df),
         file_name="สรุปสถิติกลุ่มเปราะบาง.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         type="secondary"
@@ -446,43 +465,77 @@ else:
     st.info("ไม่มีข้อมูลผู้ป่วย AIDS")
 st.markdown("---")
 
-# ----- กราฟ 7. บัตรประชาชน -----
-st.subheader("🪪 7. รายละเอียดบัตรประชาชน")
+# ----- กราฟ 7. รายละเอียด บัตรประชาชน กลุ่มเปราะบาง -----
+st.subheader("🪪 7. รายละเอียด บัตรประชาชน กลุ่มเปราะบาง")
 df_has_id = df[df['บปชช'].isin(['มี', 'ใช่', 'มีบัตร'])].copy()
 df_no_id = df[df['บปชช'].isin(['ไม่มี', 'ไม่มีบัตร'])].copy()
 
+pct_has_id = (df_has_id.shape[0] / total_inmates * 100) if total_inmates > 0 else 0
+pct_no_id = (df_no_id.shape[0] / total_inmates * 100) if total_inmates > 0 else 0
+
 col1, col2 = st.columns(2)
-col1.metric(label="ผู้ที่มีบัตรประชาชน (รวม)", value=f"{df_has_id.shape[0]} คน")
-col2.metric(label="ผู้ที่ไม่มีบัตรประชาชน (รวม)", value=f"{df_no_id.shape[0]} คน")
+col1.metric(label="ผู้ที่มีบัตรประชาชน (รวม)", value=f"{df_has_id.shape[0]} คน", delta=f"คิดเป็น {pct_has_id:.1f}%", delta_color="off")
+col2.metric(label="ผู้ที่ไม่มีบัตรประชาชน (รวม)", value=f"{df_no_id.shape[0]} คน", delta=f"คิดเป็น {pct_no_id:.1f}%", delta_color="inverse")
 
 col3, col4 = st.columns(2)
-if not df_has_id.empty:
-    has_id_stats = df_has_id['เพศ'].value_counts().reset_index()
-    has_id_stats.columns = ['เพศ', 'จำนวน']
-    has_id_stats['เปอร์เซ็นต์'] = (has_id_stats['จำนวน'] / has_id_stats['จำนวน'].sum() * 100).round(1)
-    fig7_1 = px.bar(has_id_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="ผู้ที่มีบัตรประชาชน (แยกเพศ)")
-    fig7_1.update_traces(texttemplate='%{text}%', textposition='outside')
-    col3.plotly_chart(fig7_1, use_container_width=True)
 
+with col3:
+    id_summary = pd.DataFrame({
+        'สถานะ': ['มีบัตรประชาชน', 'ไม่มีบัตรประชาชน'],
+        'จำนวน': [df_has_id.shape[0], df_no_id.shape[0]]
+    })
+    fig7_1 = px.pie(id_summary, names='สถานะ', values='จำนวน', title="สัดส่วนผู้มี/ไม่มีบัตร (ภาพรวม)", 
+                    hole=0.4, color='สถานะ', color_discrete_map={'มีบัตรประชาชน':'#2ecc71', 'ไม่มีบัตรประชาชน':'#e74c3c'})
+    fig7_1.update_traces(textinfo='percent+label')
+    st.plotly_chart(fig7_1, use_container_width=True)
+
+with col4:
+    if not df_no_id.empty:
+        no_id_gender = df_no_id['เพศ'].value_counts().reset_index()
+        no_id_gender.columns = ['เพศ', 'จำนวน']
+        fig7_2 = px.pie(no_id_gender, names='เพศ', values='จำนวน', title="สัดส่วนผู้ที่ไม่มีบัตร (แยกเพศ)", 
+                        hole=0.4, color_discrete_sequence=['#e74c3c', '#c0392b'])
+        fig7_2.update_traces(textinfo='percent+label')
+        st.plotly_chart(fig7_2, use_container_width=True)
+    else:
+        st.success("ผู้ต้องขังทุกคนมีบัตรประชาชนเรียบร้อยแล้ว")
+
+st.markdown("#### 🔍 กลุ่มเปราะบางที่ไม่มีบัตรประชาชน (แยกเพศ)")
 if not df_no_id.empty:
-    no_id_stats = df_no_id['เพศ'].value_counts().reset_index()
-    no_id_stats.columns = ['เพศ', 'จำนวน']
-    no_id_stats['เปอร์เซ็นต์'] = (no_id_stats['จำนวน'] / no_id_stats['จำนวน'].sum() * 100).round(1)
-    fig7_2 = px.bar(no_id_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="ผู้ที่ไม่มีบัตรประชาชน (แยกเพศ)", color_discrete_sequence=['#e74c3c', '#95a5a6'])
-    fig7_2.update_traces(texttemplate='%{text}%', textposition='outside')
-    col4.plotly_chart(fig7_2, use_container_width=True)
-
-st.markdown("#### 🔍 กลุ่มเปราะบางที่ไม่มีบัตรประชาชน")
-if not df_no_id.empty:
-    no_id_disabled = df_no_id[df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna() & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี')].shape[0]
-    no_id_elderly = df_no_id[df_no_id['อายุ (ปี)'] >= 60].shape[0]
-    no_id_novisit = df_no_id[df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])].shape[0]
-    no_id_aids = df_no_id[df_no_id['AIDS'].isin(['มี', 'ใช่'])].shape[0]
-
-    col_a, col_b, col_c, col_d = st.columns(4)
-    col_a.metric("ผู้พิการ (ไม่มีบัตร)", f"{no_id_disabled} คน")
-    col_b.metric("ผู้สูงอายุ (ไม่มีบัตร)", f"{no_id_elderly} คน")
-    col_c.metric("ไม่มีญาติเยี่ยม (ไม่มีบัตร)", f"{no_id_novisit} คน")
-    col_d.metric("ผู้ป่วย AIDS (ไม่มีบัตร)", f"{no_id_aids} คน")
+    disabled_m = df_no_id[(df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี') & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+    disabled_f = df_no_id[(df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี') & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+    
+    elderly_m = df_no_id[(df_no_id['อายุ (ปี)'] >= 60) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+    elderly_f = df_no_id[(df_no_id['อายุ (ปี)'] >= 60) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+    
+    novisit_m = df_no_id[(df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+    novisit_f = df_no_id[(df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+    
+    aids_m = df_no_id[(df_no_id['AIDS'].isin(['มี', 'ใช่'])) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+    aids_f = df_no_id[(df_no_id['AIDS'].isin(['มี', 'ใช่'])) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+    
+    vul_no_id_data = pd.DataFrame([
+        {'กลุ่มเปราะบาง': 'ผู้พิการ', 'เพศ': 'ชาย', 'จำนวน (คน)': disabled_m},
+        {'กลุ่มเปราะบาง': 'ผู้พิการ', 'เพศ': 'หญิง', 'จำนวน (คน)': disabled_f},
+        {'กลุ่มเปราะบาง': 'ผู้สูงอายุ', 'เพศ': 'ชาย', 'จำนวน (คน)': elderly_m},
+        {'กลุ่มเปราะบาง': 'ผู้สูงอายุ', 'เพศ': 'หญิง', 'จำนวน (คน)': elderly_f},
+        {'กลุ่มเปราะบาง': 'ไม่มีญาติเยี่ยม', 'เพศ': 'ชาย', 'จำนวน (คน)': novisit_m},
+        {'กลุ่มเปราะบาง': 'ไม่มีญาติเยี่ยม', 'เพศ': 'หญิง', 'จำนวน (คน)': novisit_f},
+        {'กลุ่มเปราะบาง': 'ผู้ป่วย AIDS', 'เพศ': 'ชาย', 'จำนวน (คน)': aids_m},
+        {'กลุ่มเปราะบาง': 'ผู้ป่วย AIDS', 'เพศ': 'หญิง', 'จำนวน (คน)': aids_f}
+    ])
+    
+    vul_no_id_data = vul_no_id_data[vul_no_id_data['จำนวน (คน)'] > 0]
+    
+    if not vul_no_id_data.empty:
+        fig7_3 = px.bar(vul_no_id_data, x='จำนวน (คน)', y='กลุ่มเปราะบาง', orientation='h', 
+                        title="จำนวนผู้ที่ไม่มีบัตรประชาชน แยกตามกลุ่มเปราะบางและเพศ", 
+                        color='เพศ', text='จำนวน (คน)', barmode='group',
+                        color_discrete_map={'ชาย': '#3498db', 'หญิง': '#e74c3c'})
+        fig7_3.update_traces(textposition='outside')
+        fig7_3.update_layout(yaxis_title=None)
+        st.plotly_chart(fig7_3, use_container_width=True)
+    else:
+        st.info("ไม่มีข้อมูลผู้ที่ไม่มีบัตรประชาชนในกลุ่มเปราะบางหลัก")
 else:
     st.info("ไม่มีข้อมูลผู้ที่ไม่มีบัตรประชาชนให้วิเคราะห์")
