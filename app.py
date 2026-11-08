@@ -43,6 +43,15 @@ except Exception as e:
 pie_gender_color = {'ชาย': '#3498db', 'หญิง': '#ff66b3'} 
 bar_gender_color = {'ชาย': '#2A9D8F', 'หญิง': '#E76F51'} 
 
+# 📌 ฟังก์ชันดักจับค่า "ไม่มี" และ "ช่องว่าง" ขั้นเด็ดขาด
+def check_no_rights(x):
+    if pd.isna(x):
+        return 'ยังไม่มีสิทธิ์'
+    val = str(x).strip().lower()
+    if val in ['ไม่มี', '', 'nan', 'none', 'null', '-', '<na>']:
+        return 'ยังไม่มีสิทธิ์'
+    return 'มีสิทธิ์แล้ว'
+
 # ------------------------------------------------
 # 2. ระบบสร้าง PDF (แบบหน้าเดียว 2 คอลัมน์)
 # ------------------------------------------------
@@ -150,10 +159,8 @@ def generate_pdf(df):
     df_aids = df[df['AIDS'].isin(['มี', 'ใช่'])].copy()
     if not df_aids.empty:
         total_aids = df_aids.shape[0]
-        # 📌 อัปเดต: ถ้าระบุว่า "ไม่มี" หรือ "เว้นว่าง" ให้นับเป็นยังไม่มีสิทธิ์
-        df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(
-            lambda x: 'ยังไม่มีสิทธิ์' if pd.isna(x) or str(x).strip() in ['ไม่มี', ''] else 'มีสิทธิ์แล้ว'
-        )
+        # ดึงฟังก์ชันช่วยตรวจสอบมาใช้
+        df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(check_no_rights)
         no_rights_count = df_aids[df_aids['สถานะสิทธิ์'] == 'ยังไม่มีสิทธิ์'].shape[0]
         has_rights_count = total_aids - no_rights_count
         y = draw_text(col2_x, y, f"รวม: {total_aids} คน | มีสิทธิ์: {has_rights_count} | ยังไม่มี: {no_rights_count}", "", 11)
@@ -291,10 +298,7 @@ def generate_excel(df):
     df_aids = df[df['AIDS'].isin(['มี', 'ใช่'])].copy()
     if not df_aids.empty:
         total_aids = df_aids.shape[0]
-        # 📌 อัปเดต: ถ้าระบุว่า "ไม่มี" หรือ "เว้นว่าง" ให้นับเป็นยังไม่มีสิทธิ์
-        df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(
-            lambda x: 'ยังไม่มีสิทธิ์' if pd.isna(x) or str(x).strip() in ['ไม่มี', ''] else 'มีสิทธิ์แล้ว'
-        )
+        df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(check_no_rights)
         no_rights_count = df_aids[df_aids['สถานะสิทธิ์'] == 'ยังไม่มีสิทธิ์'].shape[0]
         has_rights_count = total_aids - no_rights_count
         aids_stats = df_aids.groupby(['เพศ']).size().reset_index(name='จำนวน (คน)')
@@ -480,10 +484,9 @@ df_aids = df[df['AIDS'].isin(['มี', 'ใช่'])].copy()
 if not df_aids.empty:
     total_aids = df_aids.shape[0]
     
-    # 📌 อัปเดต: ถ้าระบุว่า "ไม่มี" หรือ "เว้นว่าง" ให้นับเป็นยังไม่มีสิทธิ์โดยอัตโนมัติ
-    df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(
-        lambda x: 'ยังไม่มีสิทธิ์' if pd.isna(x) or str(x).strip() in ['ไม่มี', ''] else 'มีสิทธิ์แล้ว'
-    )
+    # 📌 นำฟังก์ชัน check_no_rights มาใช้ตรวจจับคำว่า "ไม่มี" และ "เว้นว่าง"
+    df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(check_no_rights)
+    
     no_rights_count = df_aids[df_aids['สถานะสิทธิ์'] == 'ยังไม่มีสิทธิ์'].shape[0]
     has_rights_count = total_aids - no_rights_count
     
