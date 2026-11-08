@@ -39,6 +39,9 @@ except Exception as e:
     st.error(f"ไม่สามารถดึงข้อมูลได้ กรุณาตรวจสอบการแชร์ไฟล์: {e}")
     st.stop()
 
+# --- ธีมสีแยกเพศสำหรับกราฟทั้งหมด (ชาย=ฟ้า, หญิง=ชมพู) ---
+gender_color = {'ชาย': '#3498db', 'หญิง': '#ff66b3'}
+
 # ------------------------------------------------
 # 2. ระบบสร้าง PDF (แบบหน้าเดียว 2 คอลัมน์)
 # ------------------------------------------------
@@ -155,7 +158,6 @@ def generate_pdf(df):
         y += 2
         y = draw_text(col2_x, y, "กลุ่มเปราะบางที่ไม่มีบัตรประชาชน (แยกเพศ):", "B", 12)
         
-        # คำนวณแยกเพศ
         disabled_m = df_no_id[(df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี') & (df_no_id['เพศ'] == 'ชาย')].shape[0]
         disabled_f = df_no_id[(df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี') & (df_no_id['เพศ'] == 'หญิง')].shape[0]
         
@@ -174,7 +176,6 @@ def generate_pdf(df):
             ["ไม่มีญาติ", novisit_m, novisit_f, novisit_m + novisit_f],
             ["ผู้ป่วย AIDS", aids_m, aids_f, aids_m + aids_f]
         ]
-        # กรองเฉพาะกลุ่มที่มีคนไม่มีบัตร > 0
         data = [r for r in data if r[3] > 0]
         
         if data:
@@ -269,7 +270,7 @@ def generate_excel(df):
         aids_stats = df_aids.groupby(['เพศ']).size().reset_index(name='จำนวน (คน)')
         add_table(aids_stats, f"🎗️ 6. สถิติผู้ป่วย AIDS (รวม: {df_aids.shape[0]} คน | ยังไม่มีสิทธิ: {no_rights} คน)")
 
-    # 7. บัตรประชาชน (เพิ่มคอลัมน์เปอร์เซ็นต์ใน Excel)
+    # 7. บัตรประชาชน 
     df_has_id = df[df['บปชช'].isin(['มี', 'ใช่', 'มีบัตร'])]
     df_no_id = df[df['บปชช'].isin(['ไม่มี', 'ไม่มีบัตร'])]
     pct_has_id = (df_has_id.shape[0] / total_inmates * 100) if total_inmates > 0 else 0
@@ -299,9 +300,7 @@ def generate_excel(df):
             {'กลุ่มเปราะบางที่ไม่มีบัตร': 'ไม่มีญาติเยี่ยม', 'ชาย (คน)': novisit_m, 'หญิง (คน)': novisit_f, 'รวม (คน)': novisit_m + novisit_f},
             {'กลุ่มเปราะบางที่ไม่มีบัตร': 'ผู้ป่วย AIDS', 'ชาย (คน)': aids_m, 'หญิง (คน)': aids_f, 'รวม (คน)': aids_m + aids_f}
         ])
-        # ซ่อนกลุ่มที่ไม่มีข้อมูล
         df_vul_excel = df_vul_excel[df_vul_excel['รวม (คน)'] > 0]
-        
         add_table(df_vul_excel, "🔍 กลุ่มเปราะบางที่ไม่มีบัตรประชาชน (แยกเพศ)")
 
     ws.column_dimensions['B'].width = 35
@@ -349,8 +348,10 @@ df_child = df[df['[1] เด็กติดผู้ต้องขัง (ช�
 if not df_child.empty:
     child_stats = df_child.groupby(['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)', '[1] เด็กติดผู้ต้องขัง (เพศเด็ก)']).size().reset_index(name='จำนวน')
     child_stats['เปอร์เซ็นต์'] = (child_stats['จำนวน'] / child_stats['จำนวน'].sum() * 100).round(1)
+    
+    # ใช้งาน gender_color map
     fig1 = px.bar(child_stats, x='[1] เด็กติดผู้ต้องขัง (ช่วงวัย)', y='จำนวน', color='[1] เด็กติดผู้ต้องขัง (เพศเด็ก)', 
-                  text='เปอร์เซ็นต์', barmode='group', color_discrete_sequence=['#3498db', '#e74c3c'], title="แยกตามช่วงอายุและเพศเด็ก")
+                  text='เปอร์เซ็นต์', barmode='group', color_discrete_map=gender_color, title="แยกตามช่วงอายุและเพศเด็ก")
     fig1.update_traces(texttemplate='%{text}%', textposition='outside')
     st.plotly_chart(fig1, use_container_width=True)
 else:
@@ -383,7 +384,7 @@ if not df_elderly.empty:
     elder_stats['เปอร์เซ็นต์'] = (elder_stats['จำนวน'] / elder_stats['จำนวน'].sum() * 100).round(1)
     
     fig3 = px.bar(elder_stats, x='ช่วงอายุ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', barmode='group',
-                  color_discrete_sequence=['#2ecc71', '#f1c40f'], title="แยกตามช่วงอายุและเพศ")
+                  color_discrete_map=gender_color, title="แยกตามช่วงอายุและเพศ")
     fig3.update_traces(texttemplate='%{text}%', textposition='outside')
     st.plotly_chart(fig3, use_container_width=True)
 else:
@@ -405,12 +406,18 @@ if not df_disabled.empty:
     col3, col4 = st.columns(2)
     dis_gender = df_disabled['เพศ'].value_counts().reset_index()
     dis_gender.columns = ['เพศ', 'จำนวน']
-    fig4_1 = px.pie(dis_gender, names='เพศ', values='จำนวน', title="สัดส่วนผู้พิการ ชาย/หญิง", hole=0.3)
+    
+    # ใช้งาน gender_color map กับกราฟวงกลม
+    fig4_1 = px.pie(dis_gender, names='เพศ', values='จำนวน', title="สัดส่วนผู้พิการ ชาย/หญิง", 
+                    hole=0.3, color='เพศ', color_discrete_map=gender_color)
+    fig4_1.update_traces(textinfo='percent+label')
     col3.plotly_chart(fig4_1, use_container_width=True)
     
     dis_type = df_disabled.groupby(['[3] ผู้พิการ (ระบุประเภท)', 'เพศ']).size().reset_index(name='จำนวน')
     dis_type['เปอร์เซ็นต์'] = (dis_type['จำนวน'] / dis_type['จำนวน'].sum() * 100).round(1)
-    fig4_2 = px.bar(dis_type, x='[3] ผู้พิการ (ระบุประเภท)', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', barmode='group', title="แยกตามประเภท 1-7")
+    
+    fig4_2 = px.bar(dis_type, x='[3] ผู้พิการ (ระบุประเภท)', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', barmode='group', 
+                    color_discrete_map=gender_color, title="แยกตามประเภท 1-7")
     fig4_2.update_traces(texttemplate='%{text}%', textposition='outside')
     col4.plotly_chart(fig4_2, use_container_width=True)
 else:
@@ -424,7 +431,9 @@ if not df_novisit.empty:
     novisit_stats = df_novisit['เพศ'].value_counts().reset_index()
     novisit_stats.columns = ['เพศ', 'จำนวน']
     novisit_stats['เปอร์เซ็นต์'] = (novisit_stats['จำนวน'] / novisit_stats['จำนวน'].sum() * 100).round(1)
-    fig5 = px.bar(novisit_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="ผู้ต้องขังไม่มีญาติเยี่ยม (แยกเพศ)")
+    
+    fig5 = px.bar(novisit_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="ผู้ต้องขังไม่มีญาติเยี่ยม (แยกเพศ)",
+                  color_discrete_map=gender_color)
     fig5.update_traces(texttemplate='%{text}%', textposition='outside')
     st.plotly_chart(fig5, use_container_width=True)
 else:
@@ -448,7 +457,9 @@ if not df_aids.empty:
     aids_stats = df_aids['เพศ'].value_counts().reset_index()
     aids_stats.columns = ['เพศ', 'จำนวน']
     aids_stats['เปอร์เซ็นต์'] = (aids_stats['จำนวน'] / aids_stats['จำนวน'].sum() * 100).round(1)
-    fig6_1 = px.bar(aids_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="ผู้ป่วย AIDS ทั้งหมด (แยกเพศ)")
+    
+    fig6_1 = px.bar(aids_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="ผู้ป่วย AIDS ทั้งหมด (แยกเพศ)",
+                    color_discrete_map=gender_color)
     fig6_1.update_traces(texttemplate='%{text}%', textposition='outside')
     col3.plotly_chart(fig6_1, use_container_width=True)
     
@@ -456,7 +467,9 @@ if not df_aids.empty:
         no_rights_stats = df_no_rights['เพศ'].value_counts().reset_index()
         no_rights_stats.columns = ['เพศ', 'จำนวน']
         no_rights_stats['เปอร์เซ็นต์'] = (no_rights_stats['จำนวน'] / no_rights_stats['จำนวน'].sum() * 100).round(1)
-        fig6_2 = px.bar(no_rights_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="กลุ่มผู้ป่วยที่ยังไม่มีสิทธิ์ (แยกเพศ)", color_discrete_sequence=['#e74c3c', '#95a5a6'])
+        
+        fig6_2 = px.bar(no_rights_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="กลุ่มผู้ป่วยที่ยังไม่มีสิทธิ์ (แยกเพศ)", 
+                        color_discrete_map=gender_color)
         fig6_2.update_traces(texttemplate='%{text}%', textposition='outside')
         col4.plotly_chart(fig6_2, use_container_width=True)
     else:
@@ -470,31 +483,27 @@ st.subheader("🪪 7. รายละเอียด บัตรประชา
 df_has_id = df[df['บปชช'].isin(['มี', 'ใช่', 'มีบัตร'])].copy()
 df_no_id = df[df['บปชช'].isin(['ไม่มี', 'ไม่มีบัตร'])].copy()
 
-pct_has_id = (df_has_id.shape[0] / total_inmates * 100) if total_inmates > 0 else 0
-pct_no_id = (df_no_id.shape[0] / total_inmates * 100) if total_inmates > 0 else 0
+col_pie1, col_pie2 = st.columns(2)
 
-col1, col2 = st.columns(2)
-col1.metric(label="ผู้ที่มีบัตรประชาชน (รวม)", value=f"{df_has_id.shape[0]} คน", delta=f"คิดเป็น {pct_has_id:.1f}%", delta_color="off")
-col2.metric(label="ผู้ที่ไม่มีบัตรประชาชน (รวม)", value=f"{df_no_id.shape[0]} คน", delta=f"คิดเป็น {pct_no_id:.1f}%", delta_color="inverse")
-
-col3, col4 = st.columns(2)
-
-with col3:
+with col_pie1:
     id_summary = pd.DataFrame({
         'สถานะ': ['มีบัตรประชาชน', 'ไม่มีบัตรประชาชน'],
         'จำนวน': [df_has_id.shape[0], df_no_id.shape[0]]
     })
+    # กราฟนี้เป็นเรื่อง "สถานะ" จึงใช้สีเขียว/แดง ตามเดิมเพื่อให้สื่อความหมายได้ดี
     fig7_1 = px.pie(id_summary, names='สถานะ', values='จำนวน', title="สัดส่วนผู้มี/ไม่มีบัตร (ภาพรวม)", 
                     hole=0.4, color='สถานะ', color_discrete_map={'มีบัตรประชาชน':'#2ecc71', 'ไม่มีบัตรประชาชน':'#e74c3c'})
     fig7_1.update_traces(textinfo='percent+label')
     st.plotly_chart(fig7_1, use_container_width=True)
 
-with col4:
+with col_pie2:
     if not df_no_id.empty:
         no_id_gender = df_no_id['เพศ'].value_counts().reset_index()
         no_id_gender.columns = ['เพศ', 'จำนวน']
+        
+        # ใช้งาน gender_color map กับกราฟวงกลม
         fig7_2 = px.pie(no_id_gender, names='เพศ', values='จำนวน', title="สัดส่วนผู้ที่ไม่มีบัตร (แยกเพศ)", 
-                        hole=0.4, color_discrete_sequence=['#e74c3c', '#c0392b'])
+                        hole=0.4, color='เพศ', color_discrete_map=gender_color)
         fig7_2.update_traces(textinfo='percent+label')
         st.plotly_chart(fig7_2, use_container_width=True)
     else:
@@ -502,40 +511,25 @@ with col4:
 
 st.markdown("#### 🔍 กลุ่มเปราะบางที่ไม่มีบัตรประชาชน (แยกเพศ)")
 if not df_no_id.empty:
-    disabled_m = df_no_id[(df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี') & (df_no_id['เพศ'] == 'ชาย')].shape[0]
-    disabled_f = df_no_id[(df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี') & (df_no_id['เพศ'] == 'หญิง')].shape[0]
     
-    elderly_m = df_no_id[(df_no_id['อายุ (ปี)'] >= 60) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
-    elderly_f = df_no_id[(df_no_id['อายุ (ปี)'] >= 60) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
-    
-    novisit_m = df_no_id[(df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
-    novisit_f = df_no_id[(df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
-    
-    aids_m = df_no_id[(df_no_id['AIDS'].isin(['มี', 'ใช่'])) & (df_no_id['เพศ'] == 'ชาย')].shape[0]
-    aids_f = df_no_id[(df_no_id['AIDS'].isin(['มี', 'ใช่'])) & (df_no_id['เพศ'] == 'หญิง')].shape[0]
-    
-    vul_no_id_data = pd.DataFrame([
-        {'กลุ่มเปราะบาง': 'ผู้พิการ', 'เพศ': 'ชาย', 'จำนวน (คน)': disabled_m},
-        {'กลุ่มเปราะบาง': 'ผู้พิการ', 'เพศ': 'หญิง', 'จำนวน (คน)': disabled_f},
-        {'กลุ่มเปราะบาง': 'ผู้สูงอายุ', 'เพศ': 'ชาย', 'จำนวน (คน)': elderly_m},
-        {'กลุ่มเปราะบาง': 'ผู้สูงอายุ', 'เพศ': 'หญิง', 'จำนวน (คน)': elderly_f},
-        {'กลุ่มเปราะบาง': 'ไม่มีญาติเยี่ยม', 'เพศ': 'ชาย', 'จำนวน (คน)': novisit_m},
-        {'กลุ่มเปราะบาง': 'ไม่มีญาติเยี่ยม', 'เพศ': 'หญิง', 'จำนวน (คน)': novisit_f},
-        {'กลุ่มเปราะบาง': 'ผู้ป่วย AIDS', 'เพศ': 'ชาย', 'จำนวน (คน)': aids_m},
-        {'กลุ่มเปราะบาง': 'ผู้ป่วย AIDS', 'เพศ': 'หญิง', 'จำนวน (คน)': aids_f}
-    ])
-    
-    vul_no_id_data = vul_no_id_data[vul_no_id_data['จำนวน (คน)'] > 0]
-    
-    if not vul_no_id_data.empty:
-        fig7_3 = px.bar(vul_no_id_data, x='จำนวน (คน)', y='กลุ่มเปราะบาง', orientation='h', 
-                        title="จำนวนผู้ที่ไม่มีบัตรประชาชน แยกตามกลุ่มเปราะบางและเพศ", 
-                        color='เพศ', text='จำนวน (คน)', barmode='group',
-                        color_discrete_map={'ชาย': '#3498db', 'หญิง': '#e74c3c'})
-        fig7_3.update_traces(textposition='outside')
-        fig7_3.update_layout(yaxis_title=None)
-        st.plotly_chart(fig7_3, use_container_width=True)
-    else:
-        st.info("ไม่มีข้อมูลผู้ที่ไม่มีบัตรประชาชนในกลุ่มเปราะบางหลัก")
+    def get_no_id_stats(condition):
+        m = df_no_id[condition & (df_no_id['เพศ'] == 'ชาย')].shape[0]
+        f = df_no_id[condition & (df_no_id['เพศ'] == 'หญิง')].shape[0]
+        total = m + f
+        if total == 0:
+            return "0 คน"
+        pct_m = (m / total) * 100
+        pct_f = (f / total) * 100
+        return f"**{total} คน** ➔ ชาย {m} คน ({pct_m:.1f}%) | หญิง {f} คน ({pct_f:.1f}%)"
+
+    cond_disabled = (df_no_id['[3] ผู้พิการ (ระบุประเภท)'].notna()) & (df_no_id['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี')
+    cond_elderly = (df_no_id['อายุ (ปี)'] >= 60)
+    cond_novisit = (df_no_id['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี']))
+    cond_aids = (df_no_id['AIDS'].isin(['มี', 'ใช่']))
+
+    st.write(f"- ♿ **ผู้พิการ:** {get_no_id_stats(cond_disabled)}")
+    st.write(f"- 👵👴 **ผู้สูงอายุ:** {get_no_id_stats(cond_elderly)}")
+    st.write(f"- 🚫 **ไม่มีญาติเยี่ยม:** {get_no_id_stats(cond_novisit)}")
+    st.write(f"- 🎗️ **ผู้ป่วย AIDS:** {get_no_id_stats(cond_aids)}")
 else:
     st.info("ไม่มีข้อมูลผู้ที่ไม่มีบัตรประชาชนให้วิเคราะห์")
