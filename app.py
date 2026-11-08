@@ -39,10 +39,11 @@ except Exception as e:
     st.error(f"ไม่สามารถดึงข้อมูลได้ กรุณาตรวจสอบการแชร์ไฟล์: {e}")
     st.stop()
 
-# --- ธีมสีแยกเพศ ---
+# --- ธีมสีแยกเพศ (แยกสำหรับ Pie/Sunburst และ Bar) ---
 pie_gender_color = {'ชาย': '#3498db', 'หญิง': '#ff66b3'} 
 bar_gender_color = {'ชาย': '#2A9D8F', 'หญิง': '#E76F51'} 
 
+# 📌 ฟังก์ชันดักจับค่า "ไม่มี" และ "ช่องว่าง" ขั้นเด็ดขาด
 def check_no_rights(x):
     if pd.isna(x):
         return 'ยังไม่มีสิทธิ์'
@@ -52,7 +53,7 @@ def check_no_rights(x):
     return 'มีสิทธิ์แล้ว'
 
 # ------------------------------------------------
-# 2. ระบบสร้าง PDF
+# 2. ระบบสร้าง PDF (แบบหน้าเดียว 2 คอลัมน์)
 # ------------------------------------------------
 def generate_pdf(df):
     load_fonts()
@@ -210,7 +211,7 @@ def generate_pdf(df):
     return pdf.output()
 
 # ------------------------------------------------
-# 3. ระบบสร้าง Excel
+# 3. ระบบสร้าง Excel (OpenPyXL)
 # ------------------------------------------------
 def generate_excel(df):
     wb = Workbook()
@@ -226,7 +227,7 @@ def generate_excel(df):
         top=Side(style='thin', color='BDC3C7'), bottom=Side(style='thin', color='BDC3C7')
     )
 
-    months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรดฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
+    months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
     now = datetime.now()
     
     ws.cell(row=2, column=2, value="รายงานสรุปสถิติผู้ต้องขังกลุ่มเปราะบาง เรือนจำจังหวัดบุรีรัมย์").font = title_font
@@ -355,168 +356,166 @@ def generate_excel(df):
 
 
 # ------------------------------------------------
-# UI: ส่วนแสดงผล Streamlit (ปรับ Layout 2 คอลัมน์)
+# UI: ส่วนแสดงผล Streamlit
 # ------------------------------------------------
-# จัดปุ่มดาวน์โหลดไว้ข้างๆ ชื่อเรื่อง เพื่อประหยัดพื้นที่แนวตั้ง
-col_title, col_btn1, col_btn2 = st.columns([5, 2, 2])
-with col_title:
-    st.title("📊 Dashboard กลุ่มเปราะบาง")
-with col_btn1:
-    st.write("") # ดันให้ปุ่มลงมาตรงกับข้อความ
+st.title("📊 Dashboard กลุ่มเปราะบาง")
+
+col_dl1, col_dl2, _ = st.columns([1, 1, 2])
+with col_dl1:
     st.download_button(
-        label="📥 โหลดรายงาน (PDF)",
+        label="📥 ดาวน์โหลดรายงาน (PDF)",
         data=bytes(generate_pdf(df)),
         file_name="สรุปสถิติกลุ่มเปราะบาง.pdf",
         mime="application/pdf",
-        type="primary",
-        use_container_width=True
+        type="primary"
     )
-with col_btn2:
-    st.write("") 
+with col_dl2:
     st.download_button(
-        label="📥 โหลดตาราง (Excel)",
+        label="📥 ดาวน์โหลดตาราง (Excel)",
         data=generate_excel(df),
         file_name="สรุปสถิติกลุ่มเปราะบาง.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        type="secondary",
-        use_container_width=True
+        type="secondary"
     )
-st.divider()
+st.markdown("---")
 
-# แบ่งหน้าจอเป็น 2 คอลัมน์ซ้ายขวา
-main_col1, main_col2 = st.columns(2, gap="large")
+# ----- กราฟ 1. เด็กติดผู้ต้องขัง -----
+st.subheader("👶 1. สถิติเด็กติดผู้ต้องขัง")
+df_child = df[df['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)'].notna() & (df['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)'] != 'ไม่มี')].copy()
+if not df_child.empty:
+    child_stats = df_child.groupby(['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)', '[1] เด็กติดผู้ต้องขัง (เพศเด็ก)']).size().reset_index(name='จำนวน')
+    child_stats['เปอร์เซ็นต์'] = (child_stats['จำนวน'] / child_stats['จำนวน'].sum() * 100).round(1)
+    fig1 = px.bar(child_stats, x='[1] เด็กติดผู้ต้องขัง (ช่วงวัย)', y='จำนวน', color='[1] เด็กติดผู้ต้องขัง (เพศเด็ก)', 
+                  text='เปอร์เซ็นต์', barmode='group', color_discrete_map=bar_gender_color, title="แยกตามช่วงอายุและเพศเด็ก")
+    fig1.update_traces(texttemplate='%{text}%', textposition='outside')
+    st.plotly_chart(fig1, use_container_width=True)
+else:
+    st.info("ไม่มีข้อมูลเด็กติดผู้ต้องขัง")
+st.markdown("---")
 
-# ----------------- คอลัมน์ซ้าย -----------------
-with main_col1:
-    # 1. เด็กติดผู้ต้องขัง
-    st.subheader("👶 1. สถิติเด็กติดผู้ต้องขัง")
-    df_child = df[df['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)'].notna() & (df['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)'] != 'ไม่มี')].copy()
-    if not df_child.empty:
-        child_stats = df_child.groupby(['[1] เด็กติดผู้ต้องขัง (ช่วงวัย)', '[1] เด็กติดผู้ต้องขัง (เพศเด็ก)']).size().reset_index(name='จำนวน')
-        child_stats['เปอร์เซ็นต์'] = (child_stats['จำนวน'] / child_stats['จำนวน'].sum() * 100).round(1)
-        fig1 = px.bar(child_stats, x='[1] เด็กติดผู้ต้องขัง (ช่วงวัย)', y='จำนวน', color='[1] เด็กติดผู้ต้องขัง (เพศเด็ก)', 
-                      text='เปอร์เซ็นต์', barmode='group', color_discrete_map=bar_gender_color)
-        fig1.update_traces(texttemplate='%{text}%', textposition='outside')
-        fig1.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=350)
-        st.plotly_chart(fig1, use_container_width=True)
-    else:
-        st.info("ไม่มีข้อมูลเด็กติดผู้ต้องขัง")
-    st.divider()
+# ----- กราฟ 2. หญิงตั้งครรภ์ -----
+st.subheader("🤰 2. สถิติผู้ต้องขังหญิงตั้งครรภ์")
+pregnant_count = df[df['[2] หญิงตั้งครรภ์ (ใช่/ไม่ใช่)'].isin(['ใช่', 'มี'])].shape[0]
+st.metric(label="จำนวนหญิงตั้งครรภ์ทั้งหมด", value=f"{pregnant_count} คน")
+st.markdown("---")
 
-    # 3. ผู้สูงอายุ
-    st.subheader("👵👴 3. สถิติผู้ต้องขังสูงอายุ")
-    df_elderly = df[df['อายุ (ปี)'] >= 60].copy()
-    if not df_elderly.empty:
-        total_elderly = df_elderly.shape[0]
-        has_allowance = df_elderly['เบี้ยสูงอายุ'].isin(['ได้รับ', 'มี', 'ใช่'])
-        no_allowance_count = (~has_allowance).sum()
-        no_allowance_percent = (no_allowance_count / total_elderly) * 100 if total_elderly > 0 else 0
-        
-        c1, c2 = st.columns(2)
-        c1.metric("ผู้สูงอายุทั้งหมด", f"{total_elderly} คน")
-        c2.metric("ยังไม่ได้เบี้ยสูงอายุ", f"{no_allowance_count} คน", f"คิดเป็น {no_allowance_percent:.1f}%", delta_color="off")
-        
-        bins = [59, 69, 79, float('inf')]
-        labels = ['60-69 ปี', '70-79 ปี', '80 ปีขึ้นไป']
-        df_elderly['ช่วงอายุ'] = pd.cut(df_elderly['อายุ (ปี)'], bins=bins, labels=labels)
-        elder_stats = df_elderly.groupby(['ช่วงอายุ', 'เพศ']).size().reset_index(name='จำนวน')
-        elder_stats['เปอร์เซ็นต์'] = (elder_stats['จำนวน'] / elder_stats['จำนวน'].sum() * 100).round(1)
-        
-        fig3 = px.bar(elder_stats, x='ช่วงอายุ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', barmode='group',
-                      color_discrete_map=bar_gender_color)
-        fig3.update_traces(texttemplate='%{text}%', textposition='outside')
-        fig3.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=350)
-        st.plotly_chart(fig3, use_container_width=True)
-    else:
-        st.info("ไม่มีข้อมูลผู้สูงอายุ")
-    st.divider()
+# ----- กราฟ 3. ผู้สูงอายุ -----
+st.subheader("👵👴 3. สถิติผู้ต้องขังสูงอายุ")
+df_elderly = df[df['อายุ (ปี)'] >= 60].copy()
+if not df_elderly.empty:
+    total_elderly = df_elderly.shape[0]
+    has_allowance = df_elderly['เบี้ยสูงอายุ'].isin(['ได้รับ', 'มี', 'ใช่'])
+    no_allowance_count = (~has_allowance).sum()
+    no_allowance_percent = (no_allowance_count / total_elderly) * 100 if total_elderly > 0 else 0
+    
+    col1, col2 = st.columns(2)
+    col1.metric(label="ผู้สูงอายุรวมทั้งหมด", value=f"{total_elderly} คน")
+    col2.metric(label="ยังไม่ได้รับเบี้ยผู้สูงอายุ", value=f"{no_allowance_count} คน", delta=f"คิดเป็น {no_allowance_percent:.1f}%", delta_color="off")
+    
+    bins = [59, 69, 79, float('inf')]
+    labels = ['60-69 ปี', '70-79 ปี', '80 ปีขึ้นไป']
+    df_elderly['ช่วงอายุ'] = pd.cut(df_elderly['อายุ (ปี)'], bins=bins, labels=labels)
+    elder_stats = df_elderly.groupby(['ช่วงอายุ', 'เพศ']).size().reset_index(name='จำนวน')
+    elder_stats['เปอร์เซ็นต์'] = (elder_stats['จำนวน'] / elder_stats['จำนวน'].sum() * 100).round(1)
+    
+    fig3 = px.bar(elder_stats, x='ช่วงอายุ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', barmode='group',
+                  color_discrete_map=bar_gender_color, title="แยกตามช่วงอายุและเพศ")
+    fig3.update_traces(texttemplate='%{text}%', textposition='outside')
+    st.plotly_chart(fig3, use_container_width=True)
+else:
+    st.info("ไม่มีข้อมูลผู้สูงอายุ")
+st.markdown("---")
 
-    # 5. ไม่มีญาติเยี่ยม
-    st.subheader("🚫 5. สถิติไม่มีญาติเยี่ยม")
-    df_novisit = df[df['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])].copy()
-    if not df_novisit.empty:
-        novisit_stats = df_novisit['เพศ'].value_counts().reset_index()
-        novisit_stats.columns = ['เพศ', 'จำนวน']
-        novisit_stats['เปอร์เซ็นต์'] = (novisit_stats['จำนวน'] / novisit_stats['จำนวน'].sum() * 100).round(1)
-        
-        fig5 = px.bar(novisit_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์',
-                      color_discrete_map=bar_gender_color)
-        fig5.update_traces(texttemplate='%{text}%', textposition='outside')
-        fig5.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=350)
-        st.plotly_chart(fig5, use_container_width=True)
-    else:
-        st.info("ไม่มีข้อมูลผู้ต้องขังที่ไม่มีญาติเยี่ยม")
+# ----- กราฟ 4. ผู้พิการ -----
+st.subheader("♿ 4. สถิติผู้พิการ")
+df_disabled = df[df['[3] ผู้พิการ (ระบุประเภท)'].notna() & (df['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี')].copy()
+if not df_disabled.empty:
+    total_disabled = df_disabled.shape[0]
+    reg_count = df_disabled[df_disabled['สถานะบัตรคนพิการ'].isin(['มี', 'ใช่'])].shape[0]
+    unreg_count = total_disabled - reg_count
+    
+    reg_percent = (reg_count / total_disabled) * 100 if total_disabled > 0 else 0
+    unreg_percent = (unreg_count / total_disabled) * 100 if total_disabled > 0 else 0
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric(label="ผู้พิการรวมทั้งหมด", value=f"{total_disabled} คน")
+    col2.metric(label="ขึ้นทะเบียนสิทธิ์แล้ว", value=f"{reg_count} คน", delta=f"คิดเป็น {reg_percent:.1f}%", delta_color="off")
+    col3.metric(label="ยังไม่ขึ้นทะเบียนสิทธิ์", value=f"{unreg_count} คน", delta=f"คิดเป็น {unreg_percent:.1f}%", delta_color="inverse")
+    
+    col_pie1, col_bar2 = st.columns(2)
+    
+    df_disabled['สถานะการขึ้นทะเบียน'] = df_disabled['สถานะบัตรคนพิการ'].apply(lambda x: 'ขึ้นทะเบียนแล้ว' if pd.notna(x) and str(x).strip() in ['มี', 'ใช่'] else 'ยังไม่ขึ้นทะเบียน')
+    
+    sunburst_data4 = df_disabled.groupby(['เพศ', 'สถานะการขึ้นทะเบียน']).size().reset_index(name='จำนวน')
+    fig4_1 = px.sunburst(sunburst_data4, path=['เพศ', 'สถานะการขึ้นทะเบียน'], values='จำนวน', color='เพศ', 
+                         color_discrete_map=pie_gender_color, title="สัดส่วนสถานะการขึ้นทะเบียน (👉 คลิกเพื่อเจาะลึก)")
+    fig4_1.update_traces(textinfo='label+value+percent parent')
+    col_pie1.plotly_chart(fig4_1, use_container_width=True)
+    
+    # 📌 เปลี่ยนเป็นกราฟแท่งแนวนอน (Horizontal Bar Chart)
+    dis_type = df_disabled.groupby(['[3] ผู้พิการ (ระบุประเภท)', 'เพศ']).size().reset_index(name='จำนวน')
+    
+    # เรียงลำดับเพื่อให้แท่งที่ยาวที่สุดอยู่ด้านบน
+    dis_type_sort = dis_type.groupby('[3] ผู้พิการ (ระบุประเภท)')['จำนวน'].sum().reset_index()
+    dis_type_sort = dis_type_sort.sort_values(by='จำนวน', ascending=True)
+    dis_type['[3] ผู้พิการ (ระบุประเภท)'] = pd.Categorical(dis_type['[3] ผู้พิการ (ระบุประเภท)'], categories=dis_type_sort['[3] ผู้พิการ (ระบุประเภท)'], ordered=True)
+    dis_type = dis_type.sort_values('[3] ผู้พิการ (ระบุประเภท)')
+    
+    fig4_2 = px.bar(dis_type, x='จำนวน', y='[3] ผู้พิการ (ระบุประเภท)', color='เพศ', orientation='h', barmode='group', 
+                    color_discrete_map=bar_gender_color, title="แยกตามประเภทความพิการ", text='จำนวน')
+    fig4_2.update_traces(textposition='outside')
+    fig4_2.update_layout(yaxis_title=None)
+    col_bar2.plotly_chart(fig4_2, use_container_width=True)
+else:
+    st.info("ไม่มีข้อมูลผู้พิการ")
+st.markdown("---")
 
+# ----- กราฟ 5. ไม่มีญาติเยี่ยม -----
+st.subheader("🚫 5. สถิติผู้ต้องขังไม่มีญาติเยี่ยม")
+df_novisit = df[df['[4] ไม่มีญาติเยี่ยม (ใช่/ไม่ใช่)'].isin(['ใช่', 'ไม่มีญาติเยี่ยม', 'ไม่มี'])].copy()
+if not df_novisit.empty:
+    novisit_stats = df_novisit['เพศ'].value_counts().reset_index()
+    novisit_stats.columns = ['เพศ', 'จำนวน']
+    novisit_stats['เปอร์เซ็นต์'] = (novisit_stats['จำนวน'] / novisit_stats['จำนวน'].sum() * 100).round(1)
+    
+    fig5 = px.bar(novisit_stats, x='เพศ', y='จำนวน', color='เพศ', text='เปอร์เซ็นต์', title="ผู้ต้องขังไม่มีญาติเยี่ยม (แยกเพศ)",
+                  color_discrete_map=bar_gender_color)
+    fig5.update_traces(texttemplate='%{text}%', textposition='outside')
+    st.plotly_chart(fig5, use_container_width=True)
+else:
+    st.info("ไม่มีข้อมูลผู้ต้องขังที่ไม่มีญาติเยี่ยม")
+st.markdown("---")
 
-# ----------------- คอลัมน์ขวา -----------------
-with main_col2:
-    # 2. หญิงตั้งครรภ์
-    st.subheader("🤰 2. สถิติหญิงตั้งครรภ์")
-    pregnant_count = df[df['[2] หญิงตั้งครรภ์ (ใช่/ไม่ใช่)'].isin(['ใช่', 'มี'])].shape[0]
-    st.metric(label="จำนวนหญิงตั้งครรภ์ทั้งหมด", value=f"{pregnant_count} คน")
-    st.write("") # เพิ่มช่องว่างเล็กน้อยให้สมดุล
-    st.write("")
-    st.divider()
+# ----- กราฟ 6. ผู้ป่วย AIDS -----
+st.subheader("🎗️ 6. สถิติผู้ป่วย AIDS")
+df_aids = df[df['AIDS'].isin(['มี', 'ใช่'])].copy()
+if not df_aids.empty:
+    total_aids = df_aids.shape[0]
+    
+    df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(check_no_rights)
+    no_rights_count = df_aids[df_aids['สถานะสิทธิ์'] == 'ยังไม่มีสิทธิ์'].shape[0]
+    has_rights_count = total_aids - no_rights_count
+    
+    no_rights_percent = (no_rights_count / total_aids) * 100 if total_aids > 0 else 0
+    has_rights_percent = (has_rights_count / total_aids) * 100 if total_aids > 0 else 0
+    
+    col1, col2, col3 = st.columns(3)
+    col1.metric(label="จำนวนผู้ป่วย AIDS รวมทั้งหมด", value=f"{total_aids} คน")
+    col2.metric(label="มีสิทธิ์แล้ว", value=f"{has_rights_count} คน", delta=f"คิดเป็น {has_rights_percent:.1f}%", delta_color="off")
+    col3.metric(label="ยังไม่มีสิทธิ์", value=f"{no_rights_count} คน", delta=f"คิดเป็น {no_rights_percent:.1f}%", delta_color="inverse")
+    
+    _, col_pie, _ = st.columns([1, 2, 1])
+    
+    sunburst_data6 = df_aids.groupby(['เพศ', 'สถานะสิทธิ์']).size().reset_index(name='จำนวน')
+    fig6_1 = px.sunburst(sunburst_data6, path=['เพศ', 'สถานะสิทธิ์'], values='จำนวน', color='เพศ',
+                         color_discrete_map=pie_gender_color, title="สัดส่วนสถานะสิทธิ์ (👉 คลิกที่กราฟเพื่อเจาะลึก)")
+    fig6_1.update_traces(textinfo='label+value+percent parent')
+    col_pie.plotly_chart(fig6_1, use_container_width=True)
+else:
+    st.info("ไม่มีข้อมูลผู้ป่วย AIDS")
+st.markdown("---")
 
-    # 4. ผู้พิการ
-    st.subheader("♿ 4. สถิติผู้พิการ")
-    df_disabled = df[df['[3] ผู้พิการ (ระบุประเภท)'].notna() & (df['[3] ผู้พิการ (ระบุประเภท)'] != 'ไม่มี')].copy()
-    if not df_disabled.empty:
-        total_disabled = df_disabled.shape[0]
-        reg_count = df_disabled[df_disabled['สถานะบัตรคนพิการ'].isin(['มี', 'ใช่'])].shape[0]
-        unreg_count = total_disabled - reg_count
-        
-        reg_percent = (reg_count / total_disabled) * 100 if total_disabled > 0 else 0
-        unreg_percent = (unreg_count / total_disabled) * 100 if total_disabled > 0 else 0
-        
-        c1, c2 = st.columns(2)
-        c1.metric("ผู้พิการทั้งหมด", f"{total_disabled} คน")
-        c2.metric("ยังไม่ขึ้นทะเบียน", f"{unreg_count} คน", f"คิดเป็น {unreg_percent:.1f}%", delta_color="inverse")
-        
-        df_disabled['สถานะการขึ้นทะเบียน'] = df_disabled['สถานะบัตรคนพิการ'].apply(lambda x: 'ขึ้นทะเบียนแล้ว' if pd.notna(x) and str(x).strip() in ['มี', 'ใช่'] else 'ยังไม่ขึ้นทะเบียน')
-        sunburst_data4 = df_disabled.groupby(['เพศ', 'สถานะการขึ้นทะเบียน']).size().reset_index(name='จำนวน')
-        
-        fig4_1 = px.sunburst(sunburst_data4, path=['เพศ', 'สถานะการขึ้นทะเบียน'], values='จำนวน', color='เพศ', 
-                             color_discrete_map=pie_gender_color, title="สัดส่วนการขึ้นทะเบียน (คลิกที่กราฟเพื่อเจาะลึก)")
-        fig4_1.update_traces(textinfo='label+value+percent parent')
-        fig4_1.update_layout(margin=dict(t=30, b=10, l=10, r=10), height=300)
-        st.plotly_chart(fig4_1, use_container_width=True)
-        
-        dis_type_total = df_disabled.groupby('[3] ผู้พิการ (ระบุประเภท)').size().reset_index(name='จำนวน')
-        fig4_2 = px.pie(dis_type_total, names='[3] ผู้พิการ (ระบุประเภท)', values='จำนวน', title="แยกตามประเภทความพิการ", 
-                        hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-        fig4_2.update_traces(textinfo='percent+label', textposition='inside')
-        fig4_2.update_layout(margin=dict(t=30, b=10, l=10, r=10), height=300, showlegend=False)
-        st.plotly_chart(fig4_2, use_container_width=True)
-    else:
-        st.info("ไม่มีข้อมูลผู้พิการ")
-    st.divider()
-
-    # 6. ผู้ป่วย AIDS
-    st.subheader("🎗️ 6. สถิติผู้ป่วย AIDS")
-    df_aids = df[df['AIDS'].isin(['มี', 'ใช่'])].copy()
-    if not df_aids.empty:
-        total_aids = df_aids.shape[0]
-        df_aids['สถานะสิทธิ์'] = df_aids['ขึ้นทะเบียนสิทธิ(AIDS)'].apply(check_no_rights)
-        no_rights_count = df_aids[df_aids['สถานะสิทธิ์'] == 'ยังไม่มีสิทธิ์'].shape[0]
-        no_rights_percent = (no_rights_count / total_aids) * 100 if total_aids > 0 else 0
-        
-        c1, c2 = st.columns(2)
-        c1.metric("ผู้ป่วย AIDS ทั้งหมด", f"{total_aids} คน")
-        c2.metric("ยังไม่มีสิทธิ์", f"{no_rights_count} คน", f"คิดเป็น {no_rights_percent:.1f}%", delta_color="inverse")
-        
-        sunburst_data6 = df_aids.groupby(['เพศ', 'สถานะสิทธิ์']).size().reset_index(name='จำนวน')
-        fig6_1 = px.sunburst(sunburst_data6, path=['เพศ', 'สถานะสิทธิ์'], values='จำนวน', color='เพศ',
-                             color_discrete_map=pie_gender_color, title="สัดส่วนสิทธิ์ (คลิกที่กราฟเพื่อเจาะลึก)")
-        fig6_1.update_traces(textinfo='label+value+percent parent')
-        fig6_1.update_layout(margin=dict(t=30, b=10, l=10, r=10), height=350)
-        st.plotly_chart(fig6_1, use_container_width=True)
-    else:
-        st.info("ไม่มีข้อมูลผู้ป่วย AIDS")
-
-st.divider()
-
-# ----------------- ส่วนด้านล่างเต็มจอ -----------------
+# ----- กราฟ 7. รายละเอียด บัตรประชาชน กลุ่มเปราะบาง -----
 st.subheader("🪪 7. รายละเอียด บัตรประชาชน กลุ่มเปราะบาง")
 df_has_id = df[df['บปชช'].isin(['มี', 'ใช่', 'มีบัตร'])].copy()
 df_no_id = df[df['บปชช'].isin(['ไม่มี', 'ไม่มีบัตร'])].copy()
@@ -525,27 +524,24 @@ total_valid_id = df_has_id.shape[0] + df_no_id.shape[0]
 pct_has_id = (df_has_id.shape[0] / total_valid_id * 100) if total_valid_id > 0 else 0
 pct_no_id = (df_no_id.shape[0] / total_valid_id * 100) if total_valid_id > 0 else 0
 
-c1, c2, _ = st.columns([1, 1, 2])
-c1.metric(label="ผู้ที่มีบัตรประชาชน (รวม)", value=f"{df_has_id.shape[0]} คน", delta=f"คิดเป็น {pct_has_id:.1f}%", delta_color="off")
-c2.metric(label="ผู้ที่ไม่มีบัตรประชาชน (รวม)", value=f"{df_no_id.shape[0]} คน", delta=f"คิดเป็น {pct_no_id:.1f}%", delta_color="inverse")
+col1, col2 = st.columns(2)
+col1.metric(label="ผู้ที่มีบัตรประชาชน (รวม)", value=f"{df_has_id.shape[0]} คน", delta=f"คิดเป็น {pct_has_id:.1f}%", delta_color="off")
+col2.metric(label="ผู้ที่ไม่มีบัตรประชาชน (รวม)", value=f"{df_no_id.shape[0]} คน", delta=f"คิดเป็น {pct_no_id:.1f}%", delta_color="inverse")
 
-# สร้าง Sunburst ตรงกลาง
-col_empty1, col_center, col_empty2 = st.columns([1, 2, 1])
-with col_center:
-    df_sunburst = df[df['บปชช'].isin(['มี', 'ใช่', 'มีบัตร', 'ไม่มี', 'ไม่มีบัตร'])].copy()
-    df_sunburst['สถานะบัตร'] = df_sunburst['บปชช'].apply(lambda x: 'มีบัตรประชาชน' if x in ['มี', 'ใช่', 'มีบัตร'] else 'ไม่มีบัตรประชาชน')
-    sunburst_data = df_sunburst.groupby(['สถานะบัตร', 'เพศ']).size().reset_index(name='จำนวน')
-    
-    fig7 = px.sunburst(
-        sunburst_data, 
-        path=['สถานะบัตร', 'เพศ'], 
-        values='จำนวน',
-        color='สถานะบัตร',
-        color_discrete_map={'มีบัตรประชาชน': '#2ecc71', 'ไม่มีบัตรประชาชน': '#e74c3c'}
-    )
-    fig7.update_traces(textinfo="label+value+percent parent")
-    fig7.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=400)
-    st.plotly_chart(fig7, use_container_width=True)
+df_sunburst = df[df['บปชช'].isin(['มี', 'ใช่', 'มีบัตร', 'ไม่มี', 'ไม่มีบัตร'])].copy()
+df_sunburst['สถานะบัตร'] = df_sunburst['บปชช'].apply(lambda x: 'มีบัตรประชาชน' if x in ['มี', 'ใช่', 'มีบัตร'] else 'ไม่มีบัตรประชาชน')
+sunburst_data = df_sunburst.groupby(['สถานะบัตร', 'เพศ']).size().reset_index(name='จำนวน')
+
+fig7 = px.sunburst(
+    sunburst_data, 
+    path=['สถานะบัตร', 'เพศ'], 
+    values='จำนวน',
+    color='สถานะบัตร',
+    color_discrete_map={'มีบัตรประชาชน': '#2ecc71', 'ไม่มีบัตรประชาชน': '#e74c3c'},
+    title="สัดส่วนสถานะบัตรและเพศ (👉 คลิกที่กราฟวงกลมแต่ละฝั่งเพื่อเจาะลึกดูเพศ)"
+)
+fig7.update_traces(textinfo="label+value+percent parent")
+st.plotly_chart(fig7, use_container_width=True)
 
 st.markdown("#### 🔍 กลุ่มเปราะบางที่ไม่มีบัตรประชาชน (แยกเพศ)")
 
@@ -582,5 +578,6 @@ if not df_no_id.empty:
     col_c2.markdown(render_vul_card("ผู้สูงอายุ", "👵👴", cond_elderly), unsafe_allow_html=True)
     col_c3.markdown(render_vul_card("ไม่มีญาติเยี่ยม", "🚫", cond_novisit), unsafe_allow_html=True)
     col_c4.markdown(render_vul_card("ผู้ป่วย AIDS", "🎗️", cond_aids), unsafe_allow_html=True)
+
 else:
     st.info("ไม่มีข้อมูลผู้ที่ไม่มีบัตรประชาชนให้วิเคราะห์")
