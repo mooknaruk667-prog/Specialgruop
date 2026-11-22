@@ -167,7 +167,7 @@ def generate_pdf():
     return pdf.output()
 
 # ------------------------------------------------
-# 3. ระบบสร้าง Excel (แยกชีตข้อมูลดิบตามกลุ่มเปราะบาง)
+# 3. ระบบสร้าง Excel (แยกชีต + รันลำดับอัตโนมัติ)
 # ------------------------------------------------
 def generate_excel():
     wb = Workbook()
@@ -245,11 +245,14 @@ def generate_excel():
 
     def add_raw_sheet(sheet_name, target_df):
         ws_sub = wb.create_sheet(title=sheet_name)
-        clean_df = target_df.drop(columns=['กลุ่มย่อย'], errors='ignore')
+        clean_df = target_df.drop(columns=['กลุ่มย่อย', 'ลำดับ'], errors='ignore').reset_index(drop=True)
         
         if clean_df.empty:
             ws_sub.cell(row=1, column=1, value="ไม่มีข้อมูลในกลุ่มนี้").font = data_font
             return
+
+        # รันลำดับ 1, 2, 3... อัตโนมัติในแต่ละชีต
+        clean_df.insert(0, 'ลำดับ', range(1, len(clean_df) + 1))
 
         for r_idx, r in enumerate(dataframe_to_rows(clean_df, index=False, header=True), 1):
             ws_sub.append(r)
@@ -262,6 +265,8 @@ def generate_excel():
                     cell.alignment = Alignment(horizontal='center', vertical='center')
                 else:
                     cell.font = data_font
+                    if c_idx == 1:
+                        cell.alignment = Alignment(horizontal='center', vertical='center')
 
         for col in ws_sub.columns:
             max_len = max((len(str(cell.value or "")) for cell in col), default=10)
