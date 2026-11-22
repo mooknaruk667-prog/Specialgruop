@@ -146,4 +146,231 @@ def generate_pdf():
     t_d = df_dis_all.shape[0]
     draw_section("2. สถิติผู้พิการ", [
         make_row("ผู้พิการทั้งหมด", df_dis_all, t_d),
-        make_row("- พิการได้เบี้ย", df_
+        make_row("- พิการได้เบี้ย", df_dis_get, t_d),
+        make_row("- พิการไม่ได้เบี้ย", df_dis_not, t_d),
+    ])
+
+    # 3. หญิงตั้งครรภ์
+    pdf.set_font("Sarabun", "B", 13)
+    pdf.cell(0, 8, f"3. สถิติผู้ต้องขังหญิงตั้งครรภ์: {df_pregnant.shape[0]} คน", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+
+    # 4. ผู้ป่วย AIDS
+    t_a = df_aids_all.shape[0]
+    draw_section("4. สถิติผู้ป่วย AIDS", [
+        make_row("ผู้ป่วย AIDS ทั้งหมด", df_aids_all, t_a),
+        make_row("- AIDS ได้เบี้ย", df_aids_get, t_a),
+        make_row("- AIDS ไม่ได้เบี้ย", df_aids_not, t_a),
+    ])
+
+    # 5. ไม่มีบัตรประชาชน
+    t_n = df_no_id.shape[0]
+    draw_section("5. สถิติผู้ต้องขังที่ไม่มีบัตรประชาชน", [
+        make_row("ไม่มีบัตรประชาชนทั้งหมด", df_no_id, t_n),
+    ])
+
+    return pdf.output()
+
+# ------------------------------------------------
+# 3. ระบบสร้าง Excel
+# ------------------------------------------------
+def generate_excel():
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Summary Dashboard"
+
+    title_font = Font(name='Tahoma', size=13, bold=True, color='2C3E50')
+    header_font = Font(name='Tahoma', size=11, bold=True, color='FFFFFF')
+    header_fill = PatternFill(start_color="34495E", end_color="34495E", fill_type="solid")
+    data_font = Font(name='Tahoma', size=11, color='333333')
+    thin_border = Border(
+        left=Side(style='thin', color='BDC3C7'), right=Side(style='thin', color='BDC3C7'),
+        top=Side(style='thin', color='BDC3C7'), bottom=Side(style='thin', color='BDC3C7')
+    )
+
+    months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
+    now = datetime.now()
+    ws.cell(row=2, column=2, value="รายงานสรุปสถิติผู้ต้องขังกลุ่มเปราะบาง เรือนจำจังหวัดบุรีรัมย์").font = title_font
+    ws.cell(row=3, column=2, value=f"ข้อมูล ณ วันที่ {now.day} {months[now.month-1]} {now.year + 543} (เฉพาะผู้ต้องขังที่อยู่)").font = Font(name='Tahoma', size=11, italic=True)
+
+    def make_excel_rows(items, parent_total):
+        rows = []
+        for label, sub_df in items:
+            t, m, f, pm, pf = get_gender_summary(sub_df)
+            pct_p = (t / parent_total * 100) if parent_total > 0 else 0
+            rows.append({
+                'รายการ': label, 'รวม (คน)': t,
+                'ชาย (คน)': m, 'ชาย (%)': f"{pm:.1f}%",
+                'หญิง (คน)': f, 'หญิง (%)': f"{pf:.1f}%",
+                'สัดส่วนในกลุ่ม': f"{pct_p:.1f}%"
+            })
+        return pd.DataFrame(rows)
+
+    current_row = [5]
+    def add_table(df_summary, title):
+        ws.cell(row=current_row[0], column=2, value=title).font = title_font
+        current_row[0] += 1
+        for col_idx, col_name in enumerate(df_summary.columns, 2):
+            cell = ws.cell(row=current_row[0], column=col_idx, value=col_name)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.border = thin_border
+        current_row[0] += 1
+        for row in dataframe_to_rows(df_summary, index=False, header=False):
+            for c_idx, val in enumerate(row, 2):
+                cell = ws.cell(row=current_row[0], column=c_idx, value=val)
+                cell.font = data_font
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+                cell.border = thin_border
+            current_row[0] += 1
+        current_row[0] += 2
+
+    add_table(make_excel_rows([
+        ('ผู้สูงอายุทั้งหมด', df_elder_all), ('สูงอายุได้เบี้ย', df_elder_get), ('สูงอายุไม่ได้เบี้ย', df_elder_not)
+    ], df_elder_all.shape[0]), "1. สถิติผู้สูงอายุ")
+
+    add_table(make_excel_rows([
+        ('ผู้พิการทั้งหมด', df_dis_all), ('พิการได้เบี้ย', df_dis_get), ('พิการไม่ได้เบี้ย', df_dis_not)
+    ], df_dis_all.shape[0]), "2. สถิติผู้พิการ")
+
+    add_table(pd.DataFrame([{'รายการ': 'หญิงตั้งครรภ์', 'รวม (คน)': df_pregnant.shape[0]}]), "3. สถิติหญิงตั้งครรภ์")
+
+    add_table(make_excel_rows([
+        ('ผู้ป่วย AIDS ทั้งหมด', df_aids_all), ('AIDS ได้เบี้ย', df_aids_get), ('AIDS ไม่ได้เบี้ย', df_aids_not)
+    ], df_aids_all.shape[0]), "4. สถิติผู้ป่วย AIDS")
+
+    add_table(make_excel_rows([
+        ('ไม่มีบัตรประชาชนทั้งหมด', df_no_id)
+    ], df_no_id.shape[0]), "5. สถิติผู้ต้องขังไม่มีบัตรประชาชน")
+
+    for col_letter, width in [('B', 28), ('C', 14), ('D', 14), ('E', 14), ('F', 14), ('G', 14), ('H', 16)]:
+        ws.column_dimensions[col_letter].width = width
+    ws.sheet_view.showGridLines = False
+
+    ws_raw = wb.create_sheet(title="Raw Data (เฉพาะที่อยู่)")
+    for r in dataframe_to_rows(df, index=False, header=True):
+        ws_raw.append(r)
+
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
+
+# ------------------------------------------------
+# 4. UI: ส่วนแสดงผล Streamlit (Layout 2 คอลัมน์กระชับ)
+# ------------------------------------------------
+col_title, col_btn1, col_btn2 = st.columns([5, 2, 2])
+with col_title:
+    st.title("📊 Dashboard กลุ่มเปราะบาง")
+    st.caption(f"นับเฉพาะผู้ต้องขังที่สถานะ 'อยู่' จำนวนทั้งหมด {df.shape[0]} ราย")
+with col_btn1:
+    st.write("")
+    st.download_button(
+        label="📥 โหลดรายงาน (PDF)",
+        data=bytes(generate_pdf()),
+        file_name="สรุปสถิติกลุ่มเปราะบาง.pdf",
+        mime="application/pdf",
+        type="primary",
+        use_container_width=True
+    )
+with col_btn2:
+    st.write("")
+    st.download_button(
+        label="📥 โหลดตาราง (Excel)",
+        data=generate_excel(),
+        file_name="สรุปสถิติกลุ่มเปราะบาง.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        type="secondary",
+        use_container_width=True
+    )
+st.divider()
+
+# ฟังก์ชันช่วยแสดงผลการ์ดกลุ่มที่มี 2 สถานะ (ได้เบี้ย / ไม่ได้เบี้ย)
+def render_group_section(title, df_all, df_get, df_not, label_get, label_not):
+    st.subheader(title)
+    if df_all.empty:
+        st.info("ไม่มีข้อมูลในกลุ่มนี้")
+        return
+
+    t_all, m_all, f_all, pm_all, pf_all = get_gender_summary(df_all)
+    t_get, m_get, f_get, pm_get, pf_get = get_gender_summary(df_get)
+    t_not, m_not, f_not, pm_not, pf_not = get_gender_summary(df_not)
+
+    pct_get = (t_get / t_all * 100) if t_all > 0 else 0
+    pct_not = (t_not / t_all * 100) if t_all > 0 else 0
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("รวมทั้งหมด", f"{t_all} คน", f"ชาย {m_all} ({pm_all:.1f}%) | หญิง {f_all} ({pf_all:.1f}%)", delta_color="off")
+    c2.metric(label_get, f"{t_get} คน", f"คิดเป็น {pct_get:.1f}%", delta_color="off")
+    c3.metric(label_not, f"{t_not} คน", f"คิดเป็น {pct_not:.1f}%", delta_color="inverse")
+
+    # กราฟ Sunburst เจาะลึก: สถานะเบี้ย -> เพศ
+    sun_df = df_all.groupby(['กลุ่มย่อย', 'เพศ']).size().reset_index(name='จำนวน')
+    fig = px.sunburst(
+        sun_df,
+        path=['กลุ่มย่อย', 'เพศ'],
+        values='จำนวน',
+        color='กลุ่มย่อย',
+        color_discrete_map={label_get: '#2ecc71', label_not: '#e74c3c'},
+        title="สัดส่วนการรับเบี้ยและเพศ (คลิกที่กราฟเพื่อเจาะลึก)"
+    )
+    fig.update_traces(textinfo="label+value+percent parent")
+    fig.update_layout(margin=dict(t=35, b=10, l=10, r=10), height=320)
+    st.plotly_chart(fig, use_container_width=True)
+
+main_col1, main_col2 = st.columns(2, gap="large")
+
+with main_col1:
+    # 1. ผู้สูงอายุ
+    render_group_section(
+        "👵👴 1. สถิติผู้สูงอายุ",
+        df_elder_all, df_elder_get, df_elder_not,
+        "สูงอายุได้เบี้ย", "สูงอายุไม่ได้เบี้ย"
+    )
+    st.divider()
+
+    # 3. หญิงตั้งครรภ์
+    st.subheader("🤰 3. สถิติผู้ต้องขังหญิงตั้งครรภ์")
+    st.metric(label="จำนวนหญิงตั้งครรภ์ทั้งหมด", value=f"{df_pregnant.shape[0]} คน")
+
+with main_col2:
+    # 2. ผู้พิการ
+    render_group_section(
+        "♿ 2. สถิติผู้พิการ",
+        df_dis_all, df_dis_get, df_dis_not,
+        "พิการได้เบี้ย", "พิการไม่ได้เบี้ย"
+    )
+    st.divider()
+
+    # 4. ผู้ป่วย AIDS
+    render_group_section(
+        "🎗️ 4. สถิติผู้ป่วย AIDS",
+        df_aids_all, df_aids_get, df_aids_not,
+        "AIDS ได้เบี้ย", "AIDS ไม่ได้เบี้ย"
+    )
+
+st.divider()
+
+# 5. ผู้ต้องขังที่ไม่มีบัตรประชาชน
+st.subheader("🪪 5. สถิติผู้ต้องขังที่ไม่มีบัตรประชาชน")
+if not df_no_id.empty:
+    t_n, m_n, f_n, pm_n, pf_n = get_gender_summary(df_no_id)
+    c1, c2, c3 = st.columns(3)
+    c1.metric("ไม่มีบัตรประชาชนทั้งหมด", f"{t_n} คน")
+    c2.metric("เพศชาย", f"{m_n} คน", f"คิดเป็น {pm_n:.1f}%", delta_color="off")
+    c3.metric("เพศหญิง", f"{f_n} คน", f"คิดเป็น {pf_n:.1f}%", delta_color="off")
+
+    no_id_gender = df_no_id['เพศ'].value_counts().reset_index()
+    no_id_gender.columns = ['เพศ', 'จำนวน']
+    _, col_center, _ = st.columns([1, 2, 1])
+    with col_center:
+        fig5 = px.pie(
+            no_id_gender, names='เพศ', values='จำนวน',
+            title="สัดส่วนผู้ต้องขังที่ไม่มีบัตรประชาชน (แยกเพศ)",
+            hole=0.4, color='เพศ', color_discrete_map=pie_gender_color
+        )
+        fig5.update_traces(textinfo='label+value+percent')
+        fig5.update_layout(margin=dict(t=35, b=10, l=10, r=10), height=340)
+        st.plotly_chart(fig5, use_container_width=True)
+else:
+    st.info("ไม่มีข้อมูลผู้ต้องขังที่ไม่มีบัตรประชาชน")
