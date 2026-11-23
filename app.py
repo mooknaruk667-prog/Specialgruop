@@ -86,9 +86,19 @@ df_dis_all, df_dis_get, df_dis_not = build_two_group_df(
     df, ['พิการได้เบี้ย'], ['พิการไม่ได้เบี้ย'], 'พิการได้เบี้ย', 'พิการไม่ได้เบี้ย'
 )
 df_pregnant = df[has_keyword(df['สถานะ'], ['ตั้งครรภ์', 'ท้อง'])].copy()
-df_aids_all, df_aids_get, df_aids_not = build_two_group_df(
-    df, ['AIDS ได้เบี้ย', 'AIDSได้เบี้ย'], ['AIDS ไม่ได้เบี้ย', 'AIDSไม่ได้เบี้ย'], 'AIDS ได้เบี้ย', 'AIDS ไม่ได้เบี้ย'
-)
+
+# ส่วนที่ 4: ผู้ป่วย AIDS (3 กลุ่ม: ขึ้นทะเบียนแล้ว / ประสงค์ / ไม่รับเบี้ย)
+df_aids_reg = df[has_keyword(df['สถานะ'], ['AIDS ขึ้นทะเบียนแล้ว', 'AIDSขึ้นทะเบียนแล้ว'])].copy()
+df_aids_reg['กลุ่มย่อย'] = 'AIDS ขึ้นทะเบียนแล้ว'
+
+df_aids_wish = df[has_keyword(df['สถานะ'], ['AIDS ประสงค์', 'AIDSประสงค์'])].copy()
+df_aids_wish['กลุ่มย่อย'] = 'AIDS ประสงค์'
+
+df_aids_no = df[has_keyword(df['สถานะ'], ['AIDS ไม่รับเบี้ย', 'AIDSไม่รับเบี้ย'])].copy()
+df_aids_no['กลุ่มย่อย'] = 'AIDS ไม่รับเบี้ย'
+
+df_aids_all = pd.concat([df_aids_reg, df_aids_wish, df_aids_no], ignore_index=True)
+
 df_no_id = df[has_keyword(df['สถานะ'], ['ไม่มีบัตรประชาชน', 'บัตรปชช หาย', 'ไม่มีบัตร'])].copy()
 
 # ------------------------------------------------
@@ -155,8 +165,9 @@ def generate_pdf():
     t_a = df_aids_all.shape[0]
     draw_section("4. สถิติผู้ป่วย AIDS", [
         make_row("ผู้ป่วย AIDS ทั้งหมด", df_aids_all, t_a),
-        make_row("- AIDS ได้เบี้ย", df_aids_get, t_a),
-        make_row("- AIDS ไม่ได้เบี้ย", df_aids_not, t_a),
+        make_row("- AIDS ขึ้นทะเบียนแล้ว", df_aids_reg, t_a),
+        make_row("- AIDS ประสงค์", df_aids_wish, t_a),
+        make_row("- AIDS ไม่รับเบี้ย", df_aids_no, t_a),
     ])
 
     t_n = df_no_id.shape[0]
@@ -232,7 +243,10 @@ def generate_excel():
     add_table(pd.DataFrame([{'รายการ': 'หญิงตั้งครรภ์', 'รวม (คน)': df_pregnant.shape[0]}]), "3. สถิติหญิงตั้งครรภ์")
 
     add_table(make_excel_rows([
-        ('ผู้ป่วย AIDS ทั้งหมด', df_aids_all), ('AIDS ได้เบี้ย', df_aids_get), ('AIDS ไม่ได้เบี้ย', df_aids_not)
+        ('ผู้ป่วย AIDS ทั้งหมด', df_aids_all),
+        ('AIDS ขึ้นทะเบียนแล้ว', df_aids_reg),
+        ('AIDS ประสงค์', df_aids_wish),
+        ('AIDS ไม่รับเบี้ย', df_aids_no)
     ], df_aids_all.shape[0]), "4. สถิติผู้ป่วย AIDS")
 
     add_table(make_excel_rows([
@@ -343,6 +357,22 @@ def render_group_section(title, df_all, df_get, df_not, label_get, label_not):
     fig.update_layout(margin=dict(t=35, b=10, l=10, r=10), height=320)
     st.plotly_chart(fig, use_container_width=True)
 
+def render_aids_card(title, sub_df, total_aids, accent_color):
+    t, m, f, pm, pf = get_gender_summary(sub_df)
+    pct_total = (t / total_aids * 100) if total_aids > 0 else 0
+    return f"""
+    <div style="background-color: #f8f9fa; padding: 12px; border-radius: 8px; border-top: 4px solid {accent_color}; border-left: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; border-bottom: 1px solid #e0e0e0; text-align: center; margin-bottom: 10px;">
+        <div style="font-size: 14px; font-weight: bold; color: #2c3e50;">{title}</div>
+        <div style="font-size: 22px; font-weight: bold; color: {accent_color}; margin: 4px 0;">
+            {t} <span style="font-size: 13px; font-weight: normal; color: #7f8c8d;">คน ({pct_total:.1f}%)</span>
+        </div>
+        <div style="font-size: 12px; color: #34495e; line-height: 1.5;">
+            <span style="color: #3498db; font-weight: 600;">ชาย {m} ({pm:.1f}%)</span><br>
+            <span style="color: #ff66b3; font-weight: 600;">หญิง {f} ({pf:.1f}%)</span>
+        </div>
+    </div>
+    """
+
 main_col1, main_col2 = st.columns(2, gap="large")
 
 with main_col1:
@@ -364,11 +394,40 @@ with main_col2:
     )
     st.divider()
 
-    render_group_section(
-        "🎗️ 4. สถิติผู้ป่วย AIDS",
-        df_aids_all, df_aids_get, df_aids_not,
-        "AIDS ได้เบี้ย", "AIDS ไม่ได้เบี้ย"
-    )
+    # 4. ผู้ป่วย AIDS (3 กลุ่มย่อย พร้อมแยกชาย-หญิงและเปอร์เซ็นต์)
+    st.subheader("🎗️ 4. สถิติผู้ป่วย AIDS")
+    if not df_aids_all.empty:
+        t_all, m_all, f_all, pm_all, pf_all = get_gender_summary(df_aids_all)
+        st.metric(
+            "ผู้ป่วย AIDS รวมทั้งหมด",
+            f"{t_all} คน",
+            f"ชาย {m_all} ({pm_all:.1f}%) | หญิง {f_all} ({pf_all:.1f}%)",
+            delta_color="off"
+        )
+
+        c1, c2, c3 = st.columns(3)
+        c1.markdown(render_aids_card("AIDS ขึ้นทะเบียนแล้ว", df_aids_reg, t_all, "#2ecc71"), unsafe_allow_html=True)
+        c2.markdown(render_aids_card("AIDS ประสงค์", df_aids_wish, t_all, "#f39c12"), unsafe_allow_html=True)
+        c3.markdown(render_aids_card("AIDS ไม่รับเบี้ย", df_aids_no, t_all, "#e74c3c"), unsafe_allow_html=True)
+
+        sun_aids = df_aids_all.groupby(['กลุ่มย่อย', 'เพศ']).size().reset_index(name='จำนวน')
+        fig_aids = px.sunburst(
+            sun_aids,
+            path=['กลุ่มย่อย', 'เพศ'],
+            values='จำนวน',
+            color='กลุ่มย่อย',
+            color_discrete_map={
+                'AIDS ขึ้นทะเบียนแล้ว': '#2ecc71',
+                'AIDS ประสงค์': '#f39c12',
+                'AIDS ไม่รับเบี้ย': '#e74c3c'
+            },
+            title="สัดส่วนสถานะผู้ป่วย AIDS และเพศ (คลิกที่กราฟเพื่อเจาะลึก)"
+        )
+        fig_aids.update_traces(textinfo="label+value+percent parent")
+        fig_aids.update_layout(margin=dict(t=35, b=10, l=10, r=10), height=320)
+        st.plotly_chart(fig_aids, use_container_width=True)
+    else:
+        st.info("ไม่มีข้อมูลผู้ป่วย AIDS")
 
 st.divider()
 
