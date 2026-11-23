@@ -4,11 +4,15 @@ import plotly.express as px
 import urllib.request
 import os
 import io
+import msoffcrypto
 from fpdf import FPDF
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils.dataframe import dataframe_to_rows
 from datetime import datetime
+
+# 🔑 ตั้งรหัสผ่านสำหรับเปิดไฟล์ Excel ตรงนี้ครับ
+EXCEL_PASSWORD = "1234"
 
 # ------------------------------------------------
 # 1. ตั้งค่าหน้าเพจ & ระบบดึงข้อมูลและฟอนต์
@@ -178,9 +182,9 @@ def generate_pdf():
     return pdf.output()
 
 # ------------------------------------------------
-# 3. ระบบสร้าง Excel (แยกชีต + รันลำดับอัตโนมัติ)
+# 3. ระบบสร้าง Excel (แยกชีต + รันลำดับอัตโนมัติ + ใส่รหัสผ่าน)
 # ------------------------------------------------
-def generate_excel():
+def generate_excel(password=EXCEL_PASSWORD):
     wb = Workbook()
     ws = wb.active
     ws.title = "Summary Dashboard"
@@ -293,9 +297,15 @@ def generate_excel():
     add_raw_sheet("5. ไม่มีบัตรประชาชน", df_no_id)
     add_raw_sheet("ข้อมูลดิบทั้งหมด", df)
 
-    output = io.BytesIO()
-    wb.save(output)
-    return output.getvalue()
+    # บันทึกไฟล์ Excel ลงหน่วยความจำ แล้วเข้ารหัสด้วยรหัสผ่าน
+    unencrypted_output = io.BytesIO()
+    wb.save(unencrypted_output)
+    unencrypted_output.seek(0)
+
+    encrypted_output = io.BytesIO()
+    office_file = msoffcrypto.OfficeFile(unencrypted_output)
+    office_file.encrypt(password, encrypted_output)
+    return encrypted_output.getvalue()
 
 # ------------------------------------------------
 # 4. UI: ส่วนแสดงผล Streamlit (Layout 2 คอลัมน์กระชับ)
@@ -317,7 +327,7 @@ with col_btn1:
 with col_btn2:
     st.write("")
     st.download_button(
-        label="📥 โหลดตาราง (Excel)",
+        label="🔒 โหลดตาราง (Excel)",
         data=generate_excel(),
         file_name="สรุปสถิติกลุ่มเปราะบาง.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
