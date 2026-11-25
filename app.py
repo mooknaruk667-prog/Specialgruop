@@ -129,7 +129,7 @@ def generate_pdf():
         pdf.set_font("Sarabun", "B", 13)
         pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Sarabun", "B", 10)
-        widths = [65, 25, 35, 35, 30]
+        widths = [75, 22, 33, 33, 27]
         headers = ["รายการ", "รวม (คน)", "ชาย (คน / %)", "หญิง (คน / %)", "สัดส่วนกลุ่ม"]
         for h, w in zip(headers, widths):
             pdf.cell(w, 7, h, border=1, align="C")
@@ -175,8 +175,8 @@ def generate_pdf():
     ])
 
     t_n = df_no_id.shape[0]
-    draw_section("5. สถิติผู้ต้องขังที่ไม่มีบัตรประชาชน", [
-        make_row("ไม่มีบัตรประชาชนทั้งหมด", df_no_id, t_n),
+    draw_section("5. สถิติผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่", [
+        make_row("มีบัตรฯ แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่", df_no_id, t_n),
     ])
 
     return pdf.output()
@@ -254,10 +254,10 @@ def generate_excel(password=EXCEL_PASSWORD):
     ], df_aids_all.shape[0]), "4. สถิติผู้ป่วย AIDS")
 
     add_table(make_excel_rows([
-        ('ไม่มีบัตรประชาชนทั้งหมด', df_no_id)
-    ], df_no_id.shape[0]), "5. สถิติผู้ต้องขังไม่มีบัตรประชาชน")
+        ('ผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่', df_no_id)
+    ], df_no_id.shape[0]), "5. สถิติผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่")
 
-    for col_letter, width in [('B', 28), ('C', 14), ('D', 14), ('E', 14), ('F', 14), ('G', 14), ('H', 16)]:
+    for col_letter, width in [('B', 48), ('C', 14), ('D', 14), ('E', 14), ('F', 14), ('G', 14), ('H', 16)]:
         ws.column_dimensions[col_letter].width = width
     ws.sheet_view.showGridLines = False
 
@@ -294,7 +294,7 @@ def generate_excel(password=EXCEL_PASSWORD):
     add_raw_sheet("2. ผู้พิการ", df_dis_all)
     add_raw_sheet("3. หญิงตั้งครรภ์", df_pregnant)
     add_raw_sheet("4. ผู้ป่วย AIDS", df_aids_all)
-    add_raw_sheet("5. ไม่มีบัตรประชาชน", df_no_id)
+    add_raw_sheet("5. บัตรหาย-ไม่ประสงค์ทำใหม่", df_no_id)
     add_raw_sheet("ข้อมูลดิบทั้งหมด", df)
 
     # บันทึกไฟล์ Excel ลงหน่วยความจำ แล้วเข้ารหัสด้วยรหัสผ่าน
@@ -441,11 +441,11 @@ with main_col2:
 
 st.divider()
 
-st.subheader("🪪 5. สถิติผู้ต้องขังที่ไม่มีบัตรประชาชน")
+st.subheader("🪪 5. สถิติผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่")
 if not df_no_id.empty:
     t_n, m_n, f_n, pm_n, pf_n = get_gender_summary(df_no_id)
     c1, c2, c3 = st.columns(3)
-    c1.metric("ไม่มีบัตรประชาชนทั้งหมด", f"{t_n} คน")
+    c1.metric("ผู้ต้องขังมีบัตรฯ แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่", f"{t_n} คน")
     c2.metric("เพศชาย", f"{m_n} คน", f"คิดเป็น {pm_n:.1f}%", delta_color="off")
     c3.metric("เพศหญิง", f"{f_n} คน", f"คิดเป็น {pf_n:.1f}%", delta_color="off")
 
@@ -455,11 +455,11 @@ if not df_no_id.empty:
     with col_center:
         fig5 = px.pie(
             no_id_gender, names='เพศ', values='จำนวน',
-            title="สัดส่วนผู้ต้องขังที่ไม่มีบัตรประชาชน (แยกเพศ)",
+            title="สัดส่วนผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่ (แยกเพศ)",
             hole=0.4, color='เพศ', color_discrete_map=pie_gender_color
         )
         fig5.update_traces(textinfo='label+value+percent')
         fig5.update_layout(margin=dict(t=35, b=10, l=10, r=10), height=340)
         st.plotly_chart(fig5, use_container_width=True)
 else:
-    st.info("ไม่มีข้อมูลผู้ต้องขังที่ไม่มีบัตรประชาชน")
+    st.info("ไม่มีข้อมูลผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่")
