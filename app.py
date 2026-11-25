@@ -116,7 +116,37 @@ kw_no_id = ['ไม่มีบัตรประชาชน', 'บัตรป
 kw_central = ['อยู่ในทะเบียนกลาง', 'ทะเบียนกลาง']
 df_no_id = df[has_keyword(df['สถานะ'], kw_no_id)].copy()
 df_central_reg = df[has_keyword(df['สถานะ'], kw_central)].copy()
-no_id_unique_count = df[has_keyword(df['สถานะ'], kw_no_id + kw_central)].shape[0]
+
+# คำนวณยอดชาย-หญิงของบัตรหายและทะเบียนกลาง
+_, m_no_id, f_no_id, _, _ = get_gender_summary(df_no_id)
+_, m_central, f_central, _, _ = get_gender_summary(df_central_reg)
+
+# ฟังก์ชันคำนวณยอดผู้มีบัตรประชาชนแยกเพศตามสูตรที่กำหนด
+def calc_id_card_stats(total_all):
+    no_id_m_sum = m_no_id + m_central
+    no_id_f_sum = f_no_id + f_central
+    no_id_total_sum = no_id_m_sum + no_id_f_sum
+
+    has_id_total = max(total_all - no_id_total_sum, 0)
+    # สูตรแยกเพศ: ผู้ต้องขังทั้งหมดที่มีบัตรประชาชน - (บัตรหายฯ + ทะเบียนกลาง ของเพศนั้น)
+    has_id_m = max(has_id_total - no_id_m_sum, 0)
+    has_id_f = max(has_id_total - no_id_f_sum, 0)
+
+    pct_has_id = (has_id_total / total_all * 100) if total_all > 0 else 0
+    pct_has_id_m = (has_id_m / has_id_total * 100) if has_id_total > 0 else 0
+    pct_has_id_f = (has_id_f / has_id_total * 100) if has_id_total > 0 else 0
+
+    pct_no_id_all = (no_id_total_sum / total_all * 100) if total_all > 0 else 0
+    pct_no_id_m = (no_id_m_sum / no_id_total_sum * 100) if no_id_total_sum > 0 else 0
+    pct_no_id_f = (no_id_f_sum / no_id_total_sum * 100) if no_id_total_sum > 0 else 0
+
+    return {
+        'total_all': total_all,
+        'has_id_total': has_id_total, 'has_id_m': has_id_m, 'has_id_f': has_id_f,
+        'pct_has_id': pct_has_id, 'pct_has_id_m': pct_has_id_m, 'pct_has_id_f': pct_has_id_f,
+        'no_id_total': no_id_total_sum, 'no_id_m': no_id_m_sum, 'no_id_f': no_id_f_sum,
+        'pct_no_id_all': pct_no_id_all, 'pct_no_id_m': pct_no_id_m, 'pct_no_id_f': pct_no_id_f,
+    }
 
 # เก็บค่าใน session_state สำหรับปุ่มระบุยอดผู้ต้องขังทั้งหมด
 if 'total_prison_inmates' not in st.session_state:
@@ -127,7 +157,7 @@ if 'inmate_as_of_date' not in st.session_state:
 # ------------------------------------------------
 # 2. ระบบสร้าง PDF
 # ------------------------------------------------
-def generate_pdf(total_inmates_all=0, as_of_date=None):
+def generate_pdf(total_all=0, as_of_date=None):
     load_fonts()
     pdf = FPDF()
     pdf.add_page()
@@ -192,18 +222,26 @@ def generate_pdf(total_inmates_all=0, as_of_date=None):
         make_row("- AIDS ไม่รับเบี้ย", df_aids_no, t_a),
     ])
 
-    # ส่วนที่ 5: รวมข้อมูลผู้มีบัตรประชาชนลงในตาราง PDF
+    # ส่วนที่ 5: รวมข้อมูลผู้มีบัตรประชาชนแยกชาย-หญิงลงในตาราง PDF
+    id_stats = calc_id_card_stats(total_all)
     id_rows = []
-    if total_inmates_all > 0:
-        has_id_cnt = max(total_inmates_all - no_id_unique_count, 0)
-        pct_has_id = (has_id_cnt / total_inmates_all) * 100
-        pct_no_id_all = (no_id_unique_count / total_inmates_all) * 100
+    if id_stats['total_all'] > 0:
         as_of_text = format_thai_date(as_of_date) if as_of_date else format_thai_date(now)
-
-        id_rows.append([f"ผู้ต้องขังทั้งหมด (ณ {as_of_text})", f"{total_inmates_all:,}", "-", "-", "100.00%"])
-        id_rows.append(["ผู้ต้องขังที่มีบัตรประชาชน", f"{has_id_cnt:,}", "-", "-", f"{pct_has_id:.2f}%"])
-        id_rows.append(["บัตรหาย-ไม่ประสงค์ทำใหม่ / ทะเบียนกลาง", f"{no_id_unique_count:,}", "-", "-", f"{pct_no_id_all:.2f}%"])
-        parent_base = total_inmates_all
+        id_rows.append([
+            f"ผู้ต้องขังทั้งหมด (ณ {as_of_text})",
+            f"{id_stats['total_all']:,}",
+            "-",
+            "-",
+            "100.00%"
+        ])
+        id_rows.append([
+            "ผู้ต้องขังที่มีบัตรประชาชน",
+            f"{id_stats['has_id_total']:,}",
+            f"{id_stats['has_id_m']:,} ({id_stats['pct_has_id_m']:.1f}%)",
+            f"{id_stats['has_id_f']:,} ({id_stats['pct_has_id_f']:.1f}%)",
+            f"{id_stats['pct_has_id']:.2f}%"
+        ])
+        parent_base = id_stats['total_all']
     else:
         parent_base = df_no_id.shape[0] + df_central_reg.shape[0]
 
@@ -217,7 +255,7 @@ def generate_pdf(total_inmates_all=0, as_of_date=None):
 # ------------------------------------------------
 # 3. ระบบสร้าง Excel (แยกชีต + รันลำดับอัตโนมัติ + ใส่รหัสผ่าน)
 # ------------------------------------------------
-def generate_excel(password=EXCEL_PASSWORD, total_inmates_all=0, as_of_date=None):
+def generate_excel(password=EXCEL_PASSWORD, total_all=0, as_of_date=None):
     wb = Workbook()
     ws = wb.active
     ws.title = "Summary Dashboard"
@@ -291,16 +329,32 @@ def generate_excel(password=EXCEL_PASSWORD, total_inmates_all=0, as_of_date=None
         ('อยู่ในทะเบียนกลาง', df_central_reg)
     ], t_id_total), "5. สถิติบัตรประชาชน")
 
-    if total_inmates_all > 0:
-        has_id_cnt = max(total_inmates_all - no_id_unique_count, 0)
-        pct_has_id = (has_id_cnt / total_inmates_all) * 100
-        pct_no_id = (no_id_unique_count / total_inmates_all) * 100
+    id_stats = calc_id_card_stats(total_all)
+    if id_stats['total_all'] > 0:
         as_of_text = format_thai_date(as_of_date) if as_of_date else format_thai_date(now)
         add_table(pd.DataFrame([
-            {'รายการ': f'ผู้ต้องขังทั้งหมด ณ วันที่ {as_of_text}', 'จำนวน (คน)': total_inmates_all, 'คิดเป็น (%)': '100.00%'},
-            {'รายการ': 'ผู้ต้องขังที่มีบัตรประชาชน', 'จำนวน (คน)': has_id_cnt, 'คิดเป็น (%)': f'{pct_has_id:.2f}%'},
-            {'รายการ': 'บัตรหายและไม่ประสงค์เสียค่าธรรมเนียมทำใหม่ / ทะเบียนกลาง', 'จำนวน (คน)': no_id_unique_count, 'คิดเป็น (%)': f'{pct_no_id:.2f}%'},
-        ]), "สรุปสัดส่วนผู้ต้องขังที่มีบัตรประชาชน")
+            {
+                'รายการ': f'ผู้ต้องขังทั้งหมด ณ วันที่ {as_of_text}',
+                'รวม (คน)': id_stats['total_all'],
+                'ชาย (คน)': '-', 'ชาย (%)': '-',
+                'หญิง (คน)': '-', 'หญิง (%)': '-',
+                'คิดเป็น (%)': '100.00%'
+            },
+            {
+                'รายการ': 'ผู้ต้องขังที่มีบัตรประชาชน',
+                'รวม (คน)': id_stats['has_id_total'],
+                'ชาย (คน)': id_stats['has_id_m'], 'ชาย (%)': f"{id_stats['pct_has_id_m']:.1f}%",
+                'หญิง (คน)': id_stats['has_id_f'], 'หญิง (%)': f"{id_stats['pct_has_id_f']:.1f}%",
+                'คิดเป็น (%)': f"{id_stats['pct_has_id']:.2f}%"
+            },
+            {
+                'รายการ': 'บัตรหายและไม่ประสงค์เสียค่าธรรมเนียมทำใหม่ / ทะเบียนกลาง',
+                'รวม (คน)': id_stats['no_id_total'],
+                'ชาย (คน)': id_stats['no_id_m'], 'ชาย (%)': f"{id_stats['pct_no_id_m']:.1f}%",
+                'หญิง (คน)': id_stats['no_id_f'], 'หญิง (%)': f"{id_stats['pct_no_id_f']:.1f}%",
+                'คิดเป็น (%)': f"{id_stats['pct_no_id_all']:.2f}%"
+            },
+        ]), "สรุปสัดส่วนผู้ต้องขังที่มีบัตรประชาชน (แยกเพศ)")
 
     for col_letter, width in [('B', 50), ('C', 14), ('D', 14), ('E', 14), ('F', 14), ('G', 14), ('H', 16)]:
         ws.column_dimensions[col_letter].width = width
@@ -364,7 +418,10 @@ with col_btn1:
     st.write("")
     st.download_button(
         label="📥 โหลดรายงาน (PDF)",
-        data=bytes(generate_pdf(st.session_state.total_prison_inmates, st.session_state.inmate_as_of_date)),
+        data=bytes(generate_pdf(
+            st.session_state.total_prison_inmates,
+            st.session_state.inmate_as_of_date
+        )),
         file_name="สรุปสถิติกลุ่มเปราะบาง.pdf",
         mime="application/pdf",
         type="primary",
@@ -374,7 +431,11 @@ with col_btn2:
     st.write("")
     st.download_button(
         label="🔒 โหลดตาราง (Excel)",
-        data=generate_excel(EXCEL_PASSWORD, st.session_state.total_prison_inmates, st.session_state.inmate_as_of_date),
+        data=generate_excel(
+            EXCEL_PASSWORD,
+            st.session_state.total_prison_inmates,
+            st.session_state.inmate_as_of_date
+        ),
         file_name="สรุปสถิติกลุ่มเปราะบาง.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         type="secondary",
@@ -429,12 +490,14 @@ def render_aids_card(title, sub_df, total_aids, accent_color):
     </div>
     """
 
-def render_kpi_box(label, value_text, sub_text, accent_color):
+def render_kpi_box(label, value_text, sub_text, accent_color, gender_html=""):
+    gender_block = f'<div style="font-size: 12px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #dee2e6;">{gender_html}</div>' if gender_html else ""
     return f"""
     <div style="background-color: #f8f9fa; padding: 14px 12px; border-radius: 10px; border-left: 5px solid {accent_color}; border-top: 1px solid #e9ecef; border-right: 1px solid #e9ecef; border-bottom: 1px solid #e9ecef; text-align: center;">
         <div style="font-size: 13px; font-weight: 600; color: #555; margin-bottom: 4px;">{label}</div>
         <div style="font-size: 26px; font-weight: 700; color: {accent_color}; line-height: 1.2;">{value_text}</div>
         <div style="font-size: 13px; color: #6c757d; margin-top: 4px;">{sub_text}</div>
+        {gender_block}
     </div>
     """
 
@@ -521,19 +584,25 @@ with h_col2:
             st.rerun()
 
 # แถบสรุปภาพรวมด้านบน (แสดงเมื่อมีการระบุยอดผู้ต้องขังทั้งหมด)
-if st.session_state.total_prison_inmates > 0:
-    total_all_inmates = st.session_state.total_prison_inmates
-    has_id_count = max(total_all_inmates - no_id_unique_count, 0)
-    pct_has_id = (has_id_count / total_all_inmates) * 100
-    pct_no_id_all = (no_id_unique_count / total_all_inmates) * 100
+id_stats = calc_id_card_stats(st.session_state.total_prison_inmates)
+if id_stats['total_all'] > 0:
     as_of_str = format_thai_date(st.session_state.inmate_as_of_date)
+
+    gender_has_id_html = (
+        f'<span style="color:#3498db;font-weight:600;">ชาย {id_stats["has_id_m"]:,} ({id_stats["pct_has_id_m"]:.1f}%)</span> | '
+        f'<span style="color:#ff66b3;font-weight:600;">หญิง {id_stats["has_id_f"]:,} ({id_stats["pct_has_id_f"]:.1f}%)</span>'
+    )
+    gender_no_id_html = (
+        f'<span style="color:#3498db;font-weight:600;">ชาย {id_stats["no_id_m"]:,} ({id_stats["pct_no_id_m"]:.1f}%)</span> | '
+        f'<span style="color:#ff66b3;font-weight:600;">หญิง {id_stats["no_id_f"]:,} ({id_stats["pct_no_id_f"]:.1f}%)</span>'
+    )
 
     with st.container(border=True):
         st.caption(f"📅 สรุปภาพรวมบัตรประชาชน ณ วันที่ **{as_of_str}**")
         s1, s2, s3 = st.columns(3, gap="medium")
-        s1.markdown(render_kpi_box("ผู้ต้องขังทั้งหมด", f"{total_all_inmates:,} คน", "100.00%", "#2c3e50"), unsafe_allow_html=True)
-        s2.markdown(render_kpi_box("ผู้ต้องขังที่มีบัตรประชาชน", f"{has_id_count:,} คน", f"คิดเป็น {pct_has_id:.2f}%", "#2ecc71"), unsafe_allow_html=True)
-        s3.markdown(render_kpi_box("บัตรหายและไม่ประสงค์เสียค่าธรรมเนียมทำใหม่ / ทะเบียนกลาง", f"{no_id_unique_count:,} คน", f"คิดเป็น {pct_no_id_all:.2f}%", "#e74c3c"), unsafe_allow_html=True)
+        s1.markdown(render_kpi_box("ผู้ต้องขังทั้งหมด", f"{id_stats['total_all']:,} คน", "100.00%", "#2c3e50"), unsafe_allow_html=True)
+        s2.markdown(render_kpi_box("ผู้ต้องขังที่มีบัตรประชาชน", f"{id_stats['has_id_total']:,} คน", f"คิดเป็น {id_stats['pct_has_id']:.2f}%", "#2ecc71", gender_has_id_html), unsafe_allow_html=True)
+        s3.markdown(render_kpi_box("บัตรหายและไม่ประสงค์เสียค่าธรรมเนียมทำใหม่ / ทะเบียนกลาง", f"{id_stats['no_id_total']:,} คน", f"คิดเป็น {id_stats['pct_no_id_all']:.2f}%", "#e74c3c", gender_no_id_html), unsafe_allow_html=True)
 
 # แบ่ง 2 คอลัมน์ซ้าย-ขวา พร้อมกรอบการ์ด
 id_col1, id_col2 = st.columns(2, gap="medium")
