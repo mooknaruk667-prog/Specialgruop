@@ -116,7 +116,6 @@ kw_no_id = ['ไม่มีบัตรประชาชน', 'บัตรป
 kw_central = ['อยู่ในทะเบียนกลาง', 'ทะเบียนกลาง']
 df_no_id = df[has_keyword(df['สถานะ'], kw_no_id)].copy()
 df_central_reg = df[has_keyword(df['สถานะ'], kw_central)].copy()
-# นับจำนวนผู้ที่มีปัญหาเรื่องบัตรประชาชนแบบไม่ซ้ำราย
 no_id_unique_count = df[has_keyword(df['สถานะ'], kw_no_id + kw_central)].shape[0]
 
 # เก็บค่าใน session_state สำหรับปุ่มระบุยอดผู้ต้องขังทั้งหมด
@@ -429,6 +428,15 @@ def render_aids_card(title, sub_df, total_aids, accent_color):
     </div>
     """
 
+def render_kpi_box(label, value_text, sub_text, accent_color):
+    return f"""
+    <div style="background-color: #f8f9fa; padding: 14px 12px; border-radius: 10px; border-left: 5px solid {accent_color}; border-top: 1px solid #e9ecef; border-right: 1px solid #e9ecef; border-bottom: 1px solid #e9ecef; text-align: center;">
+        <div style="font-size: 13px; font-weight: 600; color: #555; margin-bottom: 4px;">{label}</div>
+        <div style="font-size: 26px; font-weight: 700; color: {accent_color}; line-height: 1.2;">{value_text}</div>
+        <div style="font-size: 13px; color: #6c757d; margin-top: 4px;">{sub_text}</div>
+    </div>
+    """
+
 main_col1, main_col2 = st.columns(2, gap="large")
 
 with main_col1:
@@ -487,8 +495,10 @@ with main_col2:
 
 st.divider()
 
-# 5. สถิติบัตรประชาชน + ปุ่มระบุยอดผู้ต้องขังทั้งหมด ณ วันที่
-h_col1, h_col2 = st.columns([3, 2])
+# ------------------------------------------------
+# 5. สถิติบัตรประชาชน (แบ่งกรอบและสัดส่วนสวยงาม)
+# ------------------------------------------------
+h_col1, h_col2 = st.columns([3, 1.5])
 with h_col1:
     st.subheader("🪪 5. สถิติบัตรประชาชน")
 with h_col2:
@@ -509,7 +519,7 @@ with h_col2:
             st.session_state.total_prison_inmates = input_total
             st.rerun()
 
-# แสดงผลเปอร์เซ็นต์ผู้ต้องขังที่มีบัตรประชาชน เมื่อมีการระบุยอดทั้งหมด
+# แถบสรุปภาพรวมด้านบน (แสดงเมื่อมีการระบุยอดผู้ต้องขังทั้งหมด)
 if st.session_state.total_prison_inmates > 0:
     total_all_inmates = st.session_state.total_prison_inmates
     has_id_count = max(total_all_inmates - no_id_unique_count, 0)
@@ -517,44 +527,75 @@ if st.session_state.total_prison_inmates > 0:
     pct_no_id_all = (no_id_unique_count / total_all_inmates) * 100
     as_of_str = format_thai_date(st.session_state.inmate_as_of_date)
 
-    st.info(f"📅 ข้อมูลยอดผู้ต้องขังทั้งหมด ณ วันที่ **{as_of_str}**")
-    s1, s2, s3 = st.columns(3)
-    s1.metric("ผู้ต้องขังทั้งหมด", f"{total_all_inmates:,} คน")
-    s2.metric("ผู้ต้องขังที่มีบัตรประชาชน", f"{has_id_count:,} คน", f"คิดเป็น {pct_has_id:.2f}%", delta_color="normal")
-    s3.metric("ไม่มีบัตร / บัตรหาย / ทะเบียนกลาง", f"{no_id_unique_count:,} คน", f"คิดเป็น {pct_no_id_all:.2f}%", delta_color="inverse")
-    st.write("")
+    with st.container(border=True):
+        st.caption(f"📅 สรุปภาพรวมบัตรประชาชน ณ วันที่ **{as_of_str}**")
+        s1, s2, s3 = st.columns(3, gap="medium")
+        s1.markdown(render_kpi_box("ผู้ต้องขังทั้งหมด", f"{total_all_inmates:,} คน", "100.00%", "#2c3e50"), unsafe_allow_html=True)
+        s2.markdown(render_kpi_box("ผู้ต้องขังที่มีบัตรประชาชน", f"{has_id_count:,} คน", f"คิดเป็น {pct_has_id:.2f}%", "#2ecc71"), unsafe_allow_html=True)
+        s3.markdown(render_kpi_box("ไม่มีบัตร / บัตรหาย / ทะเบียนกลาง", f"{no_id_unique_count:,} คน", f"คิดเป็น {pct_no_id_all:.2f}%", "#e74c3c"), unsafe_allow_html=True)
 
-id_col1, id_col2 = st.columns(2, gap="large")
+# แบ่ง 2 คอลัมน์ซ้าย-ขวา พร้อมกรอบการ์ด
+id_col1, id_col2 = st.columns(2, gap="medium")
 
 with id_col1:
-    st.markdown("##### บัตรหายและไม่ประสงค์ทำบัตรใหม่")
-    if not df_no_id.empty:
-        t_n, m_n, f_n, pm_n, pf_n = get_gender_summary(df_no_id)
-        c1, c2, c3 = st.columns(3)
-        c1.metric("รวมทั้งหมด", f"{t_n} คน")
-        c2.metric("เพศชาย", f"{m_n} คน", f"{pm_n:.1f}%", delta_color="off")
-        c3.metric("เพศหญิง", f"{f_n} คน", f"{pf_n:.1f}%", delta_color="off")
+    with st.container(border=True):
+        st.markdown("#### บัตรหายและไม่ประสงค์ทำบัตรใหม่")
+        if not df_no_id.empty:
+            t_n, m_n, f_n, pm_n, pf_n = get_gender_summary(df_no_id)
+            c1, c2, c3 = st.columns(3)
+            c1.metric("รวมทั้งหมด", f"{t_n} คน")
+            c2.metric("เพศชาย", f"{m_n} คน", f"{pm_n:.1f}%", delta_color="off")
+            c3.metric("เพศหญิง", f"{f_n} คน", f"{pf_n:.1f}%", delta_color="off")
 
-        no_id_gender = df_no_id['เพศ'].value_counts().reset_index()
-        no_id_gender.columns = ['เพศ', 'จำนวน']
-        fig5_1 = px.pie(
-            no_id_gender, names='เพศ', values='จำนวน',
-            title="สัดส่วนบัตรหาย/ไม่ประสงค์ทำบัตรใหม่ (แยกเพศ)",
-            hole=0.4, color='เพศ', color_discrete_map=pie_gender_color
-        )
-        fig5_1.update_traces(textinfo='label+value+percent')
-        fig5_1.update_layout(margin=dict(t=35, b=10, l=10, r=10), height=320)
-        st.plotly_chart(fig5_1, use_container_width=True)
-    else:
-        st.info("ไม่มีข้อมูลบัตรหายและไม่ประสงค์ทำบัตรใหม่")
+            no_id_gender = df_no_id['เพศ'].value_counts().reset_index()
+            no_id_gender.columns = ['เพศ', 'จำนวน']
+            fig5_1 = px.pie(
+                no_id_gender, names='เพศ', values='จำนวน',
+                hole=0.45, color='เพศ', color_discrete_map=pie_gender_color
+            )
+            fig5_1.update_traces(textinfo='label+value+percent')
+            fig5_1.update_layout(
+                margin=dict(t=15, b=10, l=10, r=10),
+                height=260,
+                legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5)
+            )
+            st.plotly_chart(fig5_1, use_container_width=True)
+        else:
+            st.info("ไม่มีข้อมูลบัตรหายและไม่ประสงค์ทำบัตรใหม่")
 
 with id_col2:
-    st.markdown("##### อยู่ในทะเบียนกลาง")
-    if not df_central_reg.empty:
-        t_c, m_c, f_c, pm_c, pf_c = get_gender_summary(df_central_reg)
-        c1, c2, c3 = st.columns(3)
-        c1.metric("รวมทั้งหมด", f"{t_c} คน")
-        c2.metric("เพศชาย", f"{m_c} คน", f"{pm_c:.1f}%", delta_color="off")
-        c3.metric("เพศหญิง", f"{f_c} คน", f"{pf_c:.1f}%", delta_color="off")
-    else:
-        st.info("ไม่มีข้อมูลผู้ต้องขังที่อยู่ในทะเบียนกลาง")
+    with st.container(border=True):
+        st.markdown("#### อยู่ในทะเบียนกลาง")
+        if not df_central_reg.empty:
+            t_c, m_c, f_c, pm_c, pf_c = get_gender_summary(df_central_reg)
+            st.markdown(
+                f"""
+                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; border: 1px solid #e9ecef; text-align: center; margin-bottom: 16px;">
+                    <div style="font-size: 14px; color: #6c757d; font-weight: 600;">จำนวนผู้ต้องขังในทะเบียนกลางทั้งหมด</div>
+                    <div style="font-size: 38px; font-weight: 700; color: #2c3e50; margin-top: 4px;">{t_c:,} <span style="font-size: 18px; font-weight: normal; color: #7f8c8d;">คน</span></div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            g1, g2 = st.columns(2, gap="medium")
+            g1.markdown(render_kpi_box("เพศชาย", f"{m_c:,} คน", f"คิดเป็น {pm_c:.1f}%", "#3498db"), unsafe_allow_html=True)
+            g2.markdown(render_kpi_box("เพศหญิง", f"{f_c:,} คน", f"คิดเป็น {pf_c:.1f}%", "#ff66b3"), unsafe_allow_html=True)
+
+            st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
+            st.markdown(
+                f"""
+                <div style="margin-top: 8px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 13px; color: #555; margin-bottom: 6px;">
+                        <span>ชาย {pm_c:.1f}%</span>
+                        <span>หญิง {pf_c:.1f}%</span>
+                    </div>
+                    <div style="display: flex; height: 14px; border-radius: 7px; overflow: hidden; background-color: #e9ecef;">
+                        <div style="width: {pm_c:.1f}%; background-color: #3498db;"></div>
+                        <div style="width: {pf_c:.1f}%; background-color: #ff66b3;"></div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.info("ไม่มีข้อมูลผู้ต้องขังที่อยู่ในทะเบียนกลาง")
