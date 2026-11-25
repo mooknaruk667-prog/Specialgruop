@@ -103,7 +103,9 @@ df_aids_no['กลุ่มย่อย'] = 'AIDS ไม่รับเบี้
 
 df_aids_all = pd.concat([df_aids_reg, df_aids_wish, df_aids_no], ignore_index=True)
 
+# ส่วนที่ 5: บัตรประชาชน (บัตรหาย-ไม่ประสงค์ทำใหม่ และ อยู่ในทะเบียนกลาง)
 df_no_id = df[has_keyword(df['สถานะ'], ['ไม่มีบัตรประชาชน', 'บัตรปชช หาย', 'ไม่มีบัตร'])].copy()
+df_central_reg = df[has_keyword(df['สถานะ'], ['อยู่ในทะเบียนกลาง', 'ทะเบียนกลาง'])].copy()
 
 # ------------------------------------------------
 # 2. ระบบสร้าง PDF
@@ -174,9 +176,10 @@ def generate_pdf():
         make_row("- AIDS ไม่รับเบี้ย", df_aids_no, t_a),
     ])
 
-    t_n = df_no_id.shape[0]
-    draw_section("5. สถิติผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่", [
-        make_row("มีบัตรฯ แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่", df_no_id, t_n),
+    t_id_total = df_no_id.shape[0] + df_central_reg.shape[0]
+    draw_section("5. สถิติผู้ต้องขังมีบัตรประชาชน", [
+        make_row("บัตรหายและไม่ประสงค์ทำบัตรใหม่", df_no_id, t_id_total),
+        make_row("อยู่ในทะเบียนกลาง", df_central_reg, t_id_total),
     ])
 
     return pdf.output()
@@ -253,11 +256,13 @@ def generate_excel(password=EXCEL_PASSWORD):
         ('AIDS ไม่รับเบี้ย', df_aids_no)
     ], df_aids_all.shape[0]), "4. สถิติผู้ป่วย AIDS")
 
+    t_id_total = df_no_id.shape[0] + df_central_reg.shape[0]
     add_table(make_excel_rows([
-        ('ผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่', df_no_id)
-    ], df_no_id.shape[0]), "5. สถิติผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่")
+        ('บัตรหายและไม่ประสงค์ทำบัตรใหม่', df_no_id),
+        ('อยู่ในทะเบียนกลาง', df_central_reg)
+    ], t_id_total), "5. สถิติผู้ต้องขังมีบัตรประชาชน")
 
-    for col_letter, width in [('B', 48), ('C', 14), ('D', 14), ('E', 14), ('F', 14), ('G', 14), ('H', 16)]:
+    for col_letter, width in [('B', 42), ('C', 14), ('D', 14), ('E', 14), ('F', 14), ('G', 14), ('H', 16)]:
         ws.column_dimensions[col_letter].width = width
     ws.sheet_view.showGridLines = False
 
@@ -294,7 +299,8 @@ def generate_excel(password=EXCEL_PASSWORD):
     add_raw_sheet("2. ผู้พิการ", df_dis_all)
     add_raw_sheet("3. หญิงตั้งครรภ์", df_pregnant)
     add_raw_sheet("4. ผู้ป่วย AIDS", df_aids_all)
-    add_raw_sheet("5. บัตรหาย-ไม่ประสงค์ทำใหม่", df_no_id)
+    add_raw_sheet("5.1 บัตรหาย-ไม่ประสงค์ทำใหม่", df_no_id)
+    add_raw_sheet("5.2 อยู่ในทะเบียนกลาง", df_central_reg)
     add_raw_sheet("ข้อมูลดิบทั้งหมด", df)
 
     # บันทึกไฟล์ Excel ลงหน่วยความจำ แล้วเข้ารหัสด้วยรหัสผ่าน
@@ -441,25 +447,50 @@ with main_col2:
 
 st.divider()
 
-st.subheader("🪪 5. สถิติผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่")
-if not df_no_id.empty:
-    t_n, m_n, f_n, pm_n, pf_n = get_gender_summary(df_no_id)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("ผู้ต้องขังมีบัตรฯ แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่", f"{t_n} คน")
-    c2.metric("เพศชาย", f"{m_n} คน", f"คิดเป็น {pm_n:.1f}%", delta_color="off")
-    c3.metric("เพศหญิง", f"{f_n} คน", f"คิดเป็น {pf_n:.1f}%", delta_color="off")
+# 5. สถิติผู้ต้องขังมีบัตรประชาชน (แบ่งซ้าย: บัตรหาย/ไม่ประสงค์ทำใหม่ | ขวา: อยู่ในทะเบียนกลาง)
+st.subheader("🪪 5. สถิติผู้ต้องขังมีบัตรประชาชน")
+id_col1, id_col2 = st.columns(2, gap="large")
 
-    no_id_gender = df_no_id['เพศ'].value_counts().reset_index()
-    no_id_gender.columns = ['เพศ', 'จำนวน']
-    _, col_center, _ = st.columns([1, 2, 1])
-    with col_center:
-        fig5 = px.pie(
+with id_col1:
+    st.markdown("##### บัตรหายและไม่ประสงค์ทำบัตรใหม่")
+    if not df_no_id.empty:
+        t_n, m_n, f_n, pm_n, pf_n = get_gender_summary(df_no_id)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("รวมทั้งหมด", f"{t_n} คน")
+        c2.metric("เพศชาย", f"{m_n} คน", f"{pm_n:.1f}%", delta_color="off")
+        c3.metric("เพศหญิง", f"{f_n} คน", f"{pf_n:.1f}%", delta_color="off")
+
+        no_id_gender = df_no_id['เพศ'].value_counts().reset_index()
+        no_id_gender.columns = ['เพศ', 'จำนวน']
+        fig5_1 = px.pie(
             no_id_gender, names='เพศ', values='จำนวน',
-            title="สัดส่วนผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่ (แยกเพศ)",
+            title="สัดส่วนบัตรหาย/ไม่ประสงค์ทำบัตรใหม่ (แยกเพศ)",
             hole=0.4, color='เพศ', color_discrete_map=pie_gender_color
         )
-        fig5.update_traces(textinfo='label+value+percent')
-        fig5.update_layout(margin=dict(t=35, b=10, l=10, r=10), height=340)
-        st.plotly_chart(fig5, use_container_width=True)
-else:
-    st.info("ไม่มีข้อมูลผู้ต้องขังมีบัตรประชาชน แต่บัตรหายและไม่ประสงค์ทำบัตรใหม่")
+        fig5_1.update_traces(textinfo='label+value+percent')
+        fig5_1.update_layout(margin=dict(t=35, b=10, l=10, r=10), height=320)
+        st.plotly_chart(fig5_1, use_container_width=True)
+    else:
+        st.info("ไม่มีข้อมูลบัตรหายและไม่ประสงค์ทำบัตรใหม่")
+
+with id_col2:
+    st.markdown("##### อยู่ในทะเบียนกลาง")
+    if not df_central_reg.empty:
+        t_c, m_c, f_c, pm_c, pf_c = get_gender_summary(df_central_reg)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("รวมทั้งหมด", f"{t_c} คน")
+        c2.metric("เพศชาย", f"{m_c} คน", f"{pm_c:.1f}%", delta_color="off")
+        c3.metric("เพศหญิง", f"{f_c} คน", f"{pf_c:.1f}%", delta_color="off")
+
+        central_gender = df_central_reg['เพศ'].value_counts().reset_index()
+        central_gender.columns = ['เพศ', 'จำนวน']
+        fig5_2 = px.pie(
+            central_gender, names='เพศ', values='จำนวน',
+            title="สัดส่วนอยู่ในทะเบียนกลาง (แยกเพศ)",
+            hole=0.4, color='เพศ', color_discrete_map=pie_gender_color
+        )
+        fig5_2.update_traces(textinfo='label+value+percent')
+        fig5_2.update_layout(margin=dict(t=35, b=10, l=10, r=10), height=320)
+        st.plotly_chart(fig5_2, use_container_width=True)
+    else:
+        st.info("ไม่มีข้อมูลผู้ต้องขังที่อยู่ในทะเบียนกลาง")
