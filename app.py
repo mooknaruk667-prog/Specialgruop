@@ -298,10 +298,10 @@ def generate_excel(password=EXCEL_PASSWORD, total_inmates_all=0, as_of_date=None
         add_table(pd.DataFrame([
             {'รายการ': f'ผู้ต้องขังทั้งหมด ณ วันที่ {as_of_text}', 'จำนวน (คน)': total_inmates_all, 'คิดเป็น (%)': '100.00%'},
             {'รายการ': 'ผู้ต้องขังที่มีบัตรประชาชน', 'จำนวน (คน)': has_id_cnt, 'คิดเป็น (%)': f'{pct_has_id:.2f}%'},
-            {'รายการ': 'ผู้ต้องขังที่ไม่มีบัตร/บัตรหาย/ทะเบียนกลาง', 'จำนวน (คน)': no_id_unique_count, 'คิดเป็น (%)': f'{pct_no_id:.2f}%'},
+            {'รายการ': 'บัตรหายและไม่ประสงค์เสียค่าธรรมเนียมทำใหม่ / ทะเบียนกลาง', 'จำนวน (คน)': no_id_unique_count, 'คิดเป็น (%)': f'{pct_no_id:.2f}%'},
         ]), "สรุปสัดส่วนผู้ต้องขังที่มีบัตรประชาชน")
 
-    for col_letter, width in [('B', 42), ('C', 14), ('D', 14), ('E', 14), ('F', 14), ('G', 14), ('H', 16)]:
+    for col_letter, width in [('B', 50), ('C', 14), ('D', 14), ('E', 14), ('F', 14), ('G', 14), ('H', 16)]:
         ws.column_dimensions[col_letter].width = width
     ws.sheet_view.showGridLines = False
 
@@ -532,7 +532,7 @@ if st.session_state.total_prison_inmates > 0:
         s1, s2, s3 = st.columns(3, gap="medium")
         s1.markdown(render_kpi_box("ผู้ต้องขังทั้งหมด", f"{total_all_inmates:,} คน", "100.00%", "#2c3e50"), unsafe_allow_html=True)
         s2.markdown(render_kpi_box("ผู้ต้องขังที่มีบัตรประชาชน", f"{has_id_count:,} คน", f"คิดเป็น {pct_has_id:.2f}%", "#2ecc71"), unsafe_allow_html=True)
-        s3.markdown(render_kpi_box("ไม่มีบัตร / บัตรหาย / ทะเบียนกลาง", f"{no_id_unique_count:,} คน", f"คิดเป็น {pct_no_id_all:.2f}%", "#e74c3c"), unsafe_allow_html=True)
+        s3.markdown(render_kpi_box("บัตรหายและไม่ประสงค์เสียค่าธรรมเนียมทำใหม่ / ทะเบียนกลาง", f"{no_id_unique_count:,} คน", f"คิดเป็น {pct_no_id_all:.2f}%", "#e74c3c"), unsafe_allow_html=True)
 
 # แบ่ง 2 คอลัมน์ซ้าย-ขวา พร้อมกรอบการ์ด
 id_col1, id_col2 = st.columns(2, gap="medium")
