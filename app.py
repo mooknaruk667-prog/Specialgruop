@@ -147,12 +147,12 @@ def generate_pdf(total_inmates_all=0, as_of_date=None):
         pdf.set_font("Sarabun", "B", 13)
         pdf.cell(0, 8, title, new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Sarabun", "B", 10)
-        widths = [75, 22, 33, 33, 27]
-        headers = ["รายการ", "รวม (คน)", "ชาย (คน / %)", "หญิง (คน / %)", "สัดส่วนกลุ่ม"]
+        widths = [82, 22, 30, 30, 26]
+        headers = ["รายการ", "รวม (คน)", "ชาย (คน / %)", "หญิง (คน / %)", "สัดส่วน"]
         for h, w in zip(headers, widths):
             pdf.cell(w, 7, h, border=1, align="C")
         pdf.ln()
-        pdf.set_font("Sarabun", "", 10)
+        pdf.set_font("Sarabun", "", 9.5)
         for r in rows:
             for i, (val, w) in enumerate(zip(r, widths)):
                 align = "L" if i == 0 else "C"
@@ -164,7 +164,7 @@ def generate_pdf(total_inmates_all=0, as_of_date=None):
     def make_row(label, sub_df, parent_total):
         t, m, f, pm, pf = get_gender_summary(sub_df)
         pct_parent = (t / parent_total * 100) if parent_total > 0 else 0
-        return [label, t, f"{m} ({pm:.1f}%)", f"{f} ({pf:.1f}%)", f"{pct_parent:.1f}%"]
+        return [label, f"{t:,}", f"{m:,} ({pm:.1f}%)", f"{f:,} ({pf:.1f}%)", f"{pct_parent:.1f}%"]
 
     t_e = df_elder_all.shape[0]
     draw_section("1. สถิติผู้สูงอายุ", [
@@ -192,24 +192,25 @@ def generate_pdf(total_inmates_all=0, as_of_date=None):
         make_row("- AIDS ไม่รับเบี้ย", df_aids_no, t_a),
     ])
 
-    t_id_total = df_no_id.shape[0] + df_central_reg.shape[0]
-    id_rows = [
-        make_row("บัตรหายและไม่ประสงค์ทำบัตรใหม่", df_no_id, t_id_total),
-        make_row("อยู่ในทะเบียนกลาง", df_central_reg, t_id_total),
-    ]
-    draw_section("5. สถิติบัตรประชาชน", id_rows)
-
+    # ส่วนที่ 5: รวมข้อมูลผู้มีบัตรประชาชนลงในตาราง PDF
+    id_rows = []
     if total_inmates_all > 0:
         has_id_cnt = max(total_inmates_all - no_id_unique_count, 0)
         pct_has_id = (has_id_cnt / total_inmates_all) * 100
+        pct_no_id_all = (no_id_unique_count / total_inmates_all) * 100
         as_of_text = format_thai_date(as_of_date) if as_of_date else format_thai_date(now)
-        pdf.set_font("Sarabun", "B", 11)
-        pdf.cell(
-            0, 7,
-            f"สรุปภาพรวมบัตรประชาชน ณ วันที่ {as_of_text} (ผู้ต้องขังทั้งหมด {total_inmates_all:,} คน): "
-            f"มีบัตรประชาชน {has_id_cnt:,} คน ({pct_has_id:.2f}%)",
-            new_x="LMARGIN", new_y="NEXT"
-        )
+
+        id_rows.append([f"ผู้ต้องขังทั้งหมด (ณ {as_of_text})", f"{total_inmates_all:,}", "-", "-", "100.00%"])
+        id_rows.append(["ผู้ต้องขังที่มีบัตรประชาชน", f"{has_id_cnt:,}", "-", "-", f"{pct_has_id:.2f}%"])
+        id_rows.append(["บัตรหาย-ไม่ประสงค์ทำใหม่ / ทะเบียนกลาง", f"{no_id_unique_count:,}", "-", "-", f"{pct_no_id_all:.2f}%"])
+        parent_base = total_inmates_all
+    else:
+        parent_base = df_no_id.shape[0] + df_central_reg.shape[0]
+
+    id_rows.append(make_row("- บัตรหายและไม่ประสงค์ทำบัตรใหม่", df_no_id, parent_base))
+    id_rows.append(make_row("- อยู่ในทะเบียนกลาง", df_central_reg, parent_base))
+
+    draw_section("5. สถิติบัตรประชาชน", id_rows)
 
     return pdf.output()
 
