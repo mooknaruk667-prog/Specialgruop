@@ -9,7 +9,7 @@ from fpdf import FPDF
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils.dataframe import dataframe_to_rows
-from datetime import datetime
+from datetime import datetime, date
 
 # 🔑 ตั้งรหัสผ่านสำหรับเปิดไฟล์ Excel ตรงนี้ครับ
 EXCEL_PASSWORD = "1234"
@@ -59,6 +59,14 @@ df['เพศ'] = df['เพศ'].fillna('ไม่ระบุ').astype(str).st
 pie_gender_color = {'ชาย': '#3498db', 'หญิง': '#ff66b3'}
 bar_gender_color = {'ชาย': '#2A9D8F', 'หญิง': '#E76F51'}
 
+MONTHS_TH = [
+    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+]
+
+def format_thai_date(d):
+    return f"{d.day} {MONTHS_TH[d.month - 1]} {d.year}"
+
 # ------------------------------------------------
 # ฟังก์ชันช่วยคำนวณสถิติจากคอลัมน์ "สถานะ"
 # ------------------------------------------------
@@ -104,13 +112,23 @@ df_aids_no['กลุ่มย่อย'] = 'AIDS ไม่รับเบี้
 df_aids_all = pd.concat([df_aids_reg, df_aids_wish, df_aids_no], ignore_index=True)
 
 # ส่วนที่ 5: บัตรประชาชน (บัตรหาย-ไม่ประสงค์ทำใหม่ และ อยู่ในทะเบียนกลาง)
-df_no_id = df[has_keyword(df['สถานะ'], ['ไม่มีบัตรประชาชน', 'บัตรปชช หาย', 'ไม่มีบัตร'])].copy()
-df_central_reg = df[has_keyword(df['สถานะ'], ['อยู่ในทะเบียนกลาง', 'ทะเบียนกลาง'])].copy()
+kw_no_id = ['ไม่มีบัตรประชาชน', 'บัตรปชช หาย', 'ไม่มีบัตร']
+kw_central = ['อยู่ในทะเบียนกลาง', 'ทะเบียนกลาง']
+df_no_id = df[has_keyword(df['สถานะ'], kw_no_id)].copy()
+df_central_reg = df[has_keyword(df['สถานะ'], kw_central)].copy()
+# นับจำนวนผู้ที่มีปัญหาเรื่องบัตรประชาชนแบบไม่ซ้ำราย
+no_id_unique_count = df[has_keyword(df['สถานะ'], kw_no_id + kw_central)].shape[0]
+
+# เก็บค่าใน session_state สำหรับปุ่มระบุยอดผู้ต้องขังทั้งหมด
+if 'total_prison_inmates' not in st.session_state:
+    st.session_state.total_prison_inmates = 0
+if 'inmate_as_of_date' not in st.session_state:
+    st.session_state.inmate_as_of_date = date.today()
 
 # ------------------------------------------------
 # 2. ระบบสร้าง PDF
 # ------------------------------------------------
-def generate_pdf():
+def generate_pdf(total_inmates_all=0, as_of_date=None):
     load_fonts()
     pdf = FPDF()
     pdf.add_page()
@@ -120,9 +138,8 @@ def generate_pdf():
     pdf.set_font("Sarabun", "B", 16)
     pdf.cell(0, 10, "รายงานสรุปสถิติผู้ต้องขังกลุ่มเปราะบาง เรือนจำจังหวัดบุรีรัมย์", new_x="LMARGIN", new_y="NEXT", align="C")
 
-    months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
     now = datetime.now()
-    date_str = f"ข้อมูล ณ วันที่ {now.day} {months[now.month-1]} {now.year + 543} (เฉพาะผู้ต้องขังที่อยู่: {df.shape[0]} คน)"
+    date_str = f"ข้อมูล ณ วันที่ {format_thai_date(now)} (เฉพาะผู้ต้องขังกลุ่มเปราะบางที่อยู่: {df.shape[0]} คน)"
     pdf.set_font("Sarabun", "", 11)
     pdf.cell(0, 6, date_str, new_x="LMARGIN", new_y="NEXT", align="C")
     pdf.ln(5)
@@ -177,17 +194,30 @@ def generate_pdf():
     ])
 
     t_id_total = df_no_id.shape[0] + df_central_reg.shape[0]
-    draw_section("5. สถิติผู้ต้องขังมีบัตรประชาชน", [
+    id_rows = [
         make_row("บัตรหายและไม่ประสงค์ทำบัตรใหม่", df_no_id, t_id_total),
         make_row("อยู่ในทะเบียนกลาง", df_central_reg, t_id_total),
-    ])
+    ]
+    draw_section("5. สถิติบัตรประชาชน", id_rows)
+
+    if total_inmates_all > 0:
+        has_id_cnt = max(total_inmates_all - no_id_unique_count, 0)
+        pct_has_id = (has_id_cnt / total_inmates_all) * 100
+        as_of_text = format_thai_date(as_of_date) if as_of_date else format_thai_date(now)
+        pdf.set_font("Sarabun", "B", 11)
+        pdf.cell(
+            0, 7,
+            f"สรุปภาพรวมบัตรประชาชน ณ วันที่ {as_of_text} (ผู้ต้องขังทั้งหมด {total_inmates_all:,} คน): "
+            f"มีบัตรประชาชน {has_id_cnt:,} คน ({pct_has_id:.2f}%)",
+            new_x="LMARGIN", new_y="NEXT"
+        )
 
     return pdf.output()
 
 # ------------------------------------------------
 # 3. ระบบสร้าง Excel (แยกชีต + รันลำดับอัตโนมัติ + ใส่รหัสผ่าน)
 # ------------------------------------------------
-def generate_excel(password=EXCEL_PASSWORD):
+def generate_excel(password=EXCEL_PASSWORD, total_inmates_all=0, as_of_date=None):
     wb = Workbook()
     ws = wb.active
     ws.title = "Summary Dashboard"
@@ -201,10 +231,9 @@ def generate_excel(password=EXCEL_PASSWORD):
         top=Side(style='thin', color='BDC3C7'), bottom=Side(style='thin', color='BDC3C7')
     )
 
-    months = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
     now = datetime.now()
     ws.cell(row=2, column=2, value="รายงานสรุปสถิติผู้ต้องขังกลุ่มเปราะบาง เรือนจำจังหวัดบุรีรัมย์").font = title_font
-    ws.cell(row=3, column=2, value=f"ข้อมูล ณ วันที่ {now.day} {months[now.month-1]} {now.year + 543} (เฉพาะผู้ต้องขังที่อยู่)").font = Font(name='Tahoma', size=11, italic=True)
+    ws.cell(row=3, column=2, value=f"ข้อมูล ณ วันที่ {format_thai_date(now)} (เฉพาะผู้ต้องขังที่อยู่)").font = Font(name='Tahoma', size=11, italic=True)
 
     def make_excel_rows(items, parent_total):
         rows = []
@@ -260,7 +289,18 @@ def generate_excel(password=EXCEL_PASSWORD):
     add_table(make_excel_rows([
         ('บัตรหายและไม่ประสงค์ทำบัตรใหม่', df_no_id),
         ('อยู่ในทะเบียนกลาง', df_central_reg)
-    ], t_id_total), "5. สถิติผู้ต้องขังมีบัตรประชาชน")
+    ], t_id_total), "5. สถิติบัตรประชาชน")
+
+    if total_inmates_all > 0:
+        has_id_cnt = max(total_inmates_all - no_id_unique_count, 0)
+        pct_has_id = (has_id_cnt / total_inmates_all) * 100
+        pct_no_id = (no_id_unique_count / total_inmates_all) * 100
+        as_of_text = format_thai_date(as_of_date) if as_of_date else format_thai_date(now)
+        add_table(pd.DataFrame([
+            {'รายการ': f'ผู้ต้องขังทั้งหมด ณ วันที่ {as_of_text}', 'จำนวน (คน)': total_inmates_all, 'คิดเป็น (%)': '100.00%'},
+            {'รายการ': 'ผู้ต้องขังที่มีบัตรประชาชน', 'จำนวน (คน)': has_id_cnt, 'คิดเป็น (%)': f'{pct_has_id:.2f}%'},
+            {'รายการ': 'ผู้ต้องขังที่ไม่มีบัตร/บัตรหาย/ทะเบียนกลาง', 'จำนวน (คน)': no_id_unique_count, 'คิดเป็น (%)': f'{pct_no_id:.2f}%'},
+        ]), "สรุปสัดส่วนผู้ต้องขังที่มีบัตรประชาชน")
 
     for col_letter, width in [('B', 42), ('C', 14), ('D', 14), ('E', 14), ('F', 14), ('G', 14), ('H', 16)]:
         ws.column_dimensions[col_letter].width = width
@@ -324,7 +364,7 @@ with col_btn1:
     st.write("")
     st.download_button(
         label="📥 โหลดรายงาน (PDF)",
-        data=bytes(generate_pdf()),
+        data=bytes(generate_pdf(st.session_state.total_prison_inmates, st.session_state.inmate_as_of_date)),
         file_name="สรุปสถิติกลุ่มเปราะบาง.pdf",
         mime="application/pdf",
         type="primary",
@@ -334,7 +374,7 @@ with col_btn2:
     st.write("")
     st.download_button(
         label="🔒 โหลดตาราง (Excel)",
-        data=generate_excel(),
+        data=generate_excel(EXCEL_PASSWORD, st.session_state.total_prison_inmates, st.session_state.inmate_as_of_date),
         file_name="สรุปสถิติกลุ่มเปราะบาง.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         type="secondary",
@@ -447,8 +487,43 @@ with main_col2:
 
 st.divider()
 
-# 5. สถิติผู้ต้องขังมีบัตรประชาชน (แบ่งซ้าย: บัตรหาย/ไม่ประสงค์ทำใหม่ | ขวา: อยู่ในทะเบียนกลาง)
-st.subheader("🪪 5. สถิติผู้ต้องขังมีบัตรประชาชน")
+# 5. สถิติบัตรประชาชน + ปุ่มระบุยอดผู้ต้องขังทั้งหมด ณ วันที่
+h_col1, h_col2 = st.columns([3, 2])
+with h_col1:
+    st.subheader("🪪 5. สถิติบัตรประชาชน")
+with h_col2:
+    with st.popover("📝 ระบุยอดผู้ต้องขังทั้งหมด ณ วันที่", use_container_width=True):
+        st.markdown("**กรอกยอดผู้ต้องขังทั้งหมดเพื่อคำนวณ % ผู้มีบัตรประชาชน**")
+        input_date = st.date_input(
+            "ข้อมูล ณ วันที่:",
+            value=st.session_state.inmate_as_of_date
+        )
+        input_total = st.number_input(
+            "จำนวนผู้ต้องขังทั้งหมด (คน):",
+            min_value=0,
+            step=1,
+            value=st.session_state.total_prison_inmates
+        )
+        if st.button("บันทึกและคำนวณ", type="primary", use_container_width=True):
+            st.session_state.inmate_as_of_date = input_date
+            st.session_state.total_prison_inmates = input_total
+            st.rerun()
+
+# แสดงผลเปอร์เซ็นต์ผู้ต้องขังที่มีบัตรประชาชน เมื่อมีการระบุยอดทั้งหมด
+if st.session_state.total_prison_inmates > 0:
+    total_all_inmates = st.session_state.total_prison_inmates
+    has_id_count = max(total_all_inmates - no_id_unique_count, 0)
+    pct_has_id = (has_id_count / total_all_inmates) * 100
+    pct_no_id_all = (no_id_unique_count / total_all_inmates) * 100
+    as_of_str = format_thai_date(st.session_state.inmate_as_of_date)
+
+    st.info(f"📅 ข้อมูลยอดผู้ต้องขังทั้งหมด ณ วันที่ **{as_of_str}**")
+    s1, s2, s3 = st.columns(3)
+    s1.metric("ผู้ต้องขังทั้งหมด", f"{total_all_inmates:,} คน")
+    s2.metric("ผู้ต้องขังที่มีบัตรประชาชน", f"{has_id_count:,} คน", f"คิดเป็น {pct_has_id:.2f}%", delta_color="normal")
+    s3.metric("ไม่มีบัตร / บัตรหาย / ทะเบียนกลาง", f"{no_id_unique_count:,} คน", f"คิดเป็น {pct_no_id_all:.2f}%", delta_color="inverse")
+    st.write("")
+
 id_col1, id_col2 = st.columns(2, gap="large")
 
 with id_col1:
@@ -481,16 +556,5 @@ with id_col2:
         c1.metric("รวมทั้งหมด", f"{t_c} คน")
         c2.metric("เพศชาย", f"{m_c} คน", f"{pm_c:.1f}%", delta_color="off")
         c3.metric("เพศหญิง", f"{f_c} คน", f"{pf_c:.1f}%", delta_color="off")
-
-        central_gender = df_central_reg['เพศ'].value_counts().reset_index()
-        central_gender.columns = ['เพศ', 'จำนวน']
-        fig5_2 = px.pie(
-            central_gender, names='เพศ', values='จำนวน',
-            title="สัดส่วนอยู่ในทะเบียนกลาง (แยกเพศ)",
-            hole=0.4, color='เพศ', color_discrete_map=pie_gender_color
-        )
-        fig5_2.update_traces(textinfo='label+value+percent')
-        fig5_2.update_layout(margin=dict(t=35, b=10, l=10, r=10), height=320)
-        st.plotly_chart(fig5_2, use_container_width=True)
     else:
         st.info("ไม่มีข้อมูลผู้ต้องขังที่อยู่ในทะเบียนกลาง")
